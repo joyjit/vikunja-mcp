@@ -1,0 +1,22 @@
+# Ephemeral Vikunja for MCP integration tests. SQLite on tmpfs so every run
+# starts clean. Image is overridable via VIKUNJA_IMAGE.
+#
+#   docker compose -p vikunja-mcp-e2e -f docker/vikunja.e2e.yml up -d
+#   docker compose -p vikunja-mcp-e2e -f docker/vikunja.e2e.yml down -v
+#
+# No default user — scripts/vikunja-docker.ts registers one and mints a JWT.
+services:
+  vikunja:
+    image: ${VIKUNJA_IMAGE:-vikunja/vikunja:2.3.0}
+    container_name: vikunja-mcp-e2e
+    ports:
+      - '${VIKUNJA_PORT:-3456}:3456'
+    environment:
+      VIKUNJA_SERVICE_PUBLICURL: 'http://localhost:${VIKUNJA_PORT:-3456}/'
+      VIKUNJA_SERVICE_JWTSECRET: e2e-ci-not-a-secret
+      VIKUNJA_SERVICE_ENABLEREGISTRATION: 'true'
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /db/vikunja.db
+    tmpfs:
+      - /db:uid=1000,gid=1000,mode=0755
+      - /app/vikunja/files:uid=1000,gid=1000,mode=0755

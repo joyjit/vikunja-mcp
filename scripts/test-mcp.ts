@@ -375,14 +375,12 @@ async function testTaskLabels(): Promise<void> {
     return;
   }
 
-  // Apply single label
+  // Apply single label (Vikunja 2.x: PUT /tasks/{id}/labels with body, not …/labels/{labelId})
   try {
-    await api('PUT', `/tasks/${taskId}/labels/${labelId}`, { label_id: labelId });
+    await api('PUT', `/tasks/${taskId}/labels`, { label_id: labelId });
 
-    // Read back and verify
-    const task = await api<{ labels: Array<{ id: number }> | null }>('GET', `/tasks/${taskId}`);
-    const labels = task.labels || [];
-    if (!labels.some(l => l.id === labelId)) {
+    const labels = await api<Array<{ id: number }>>('GET', `/tasks/${taskId}/labels`);
+    if (!labels.some((l) => l.id === labelId)) {
       fail('apply single label', 'label not found on task after apply');
     } else {
       pass('apply single label');
@@ -393,10 +391,9 @@ async function testTaskLabels(): Promise<void> {
 
   // Apply second label
   try {
-    await api('PUT', `/tasks/${taskId}/labels/${labelId2}`, { label_id: labelId2 });
+    await api('PUT', `/tasks/${taskId}/labels`, { label_id: labelId2 });
 
-    const task = await api<{ labels: Array<{ id: number }> | null }>('GET', `/tasks/${taskId}`);
-    const labels = task.labels || [];
+    const labels = await api<Array<{ id: number }>>('GET', `/tasks/${taskId}/labels`);
     if (labels.length < 2) {
       fail('apply multiple labels', `expected 2 labels, got ${labels.length}`);
     } else {
@@ -410,9 +407,8 @@ async function testTaskLabels(): Promise<void> {
   try {
     await api('DELETE', `/tasks/${taskId}/labels/${labelId}`);
 
-    const task = await api<{ labels: Array<{ id: number }> | null }>('GET', `/tasks/${taskId}`);
-    const labels = task.labels || [];
-    if (labels.some(l => l.id === labelId)) {
+    const labels = await api<Array<{ id: number }>>('GET', `/tasks/${taskId}/labels`);
+    if (labels.some((l) => l.id === labelId)) {
       fail('remove label', 'label still present after remove');
     } else {
       pass('remove label');
@@ -423,8 +419,10 @@ async function testTaskLabels(): Promise<void> {
 
   // List labels on task
   try {
-    const task = await api<{ labels: Array<{ id: number; title: string }> | null }>('GET', `/tasks/${taskId}`);
-    const labels = task.labels || [];
+    const labels = await api<Array<{ id: number; title: string }>>(
+      'GET',
+      `/tasks/${taskId}/labels`
+    );
     if (labels.length !== 1) {
       fail('list task labels', `expected 1 label, got ${labels.length}`);
     } else if (labels[0].id !== labelId2) {
@@ -607,9 +605,13 @@ async function testProjects(): Promise<void> {
     fail('update project', (e as Error).message);
   }
 
-  // Archive project
+  // Archive project (Vikunja requires title on update — sparse is_archived alone → 412)
   try {
-    await api('POST', `/projects/${projectId}`, { is_archived: true });
+    const current = await api<{ title: string }>('GET', `/projects/${projectId}`);
+    await api('POST', `/projects/${projectId}`, {
+      title: current.title,
+      is_archived: true,
+    });
 
     const project = await api<{ is_archived: boolean }>('GET', `/projects/${projectId}`);
     if (!project.is_archived) {
@@ -617,7 +619,10 @@ async function testProjects(): Promise<void> {
     } else {
       pass('archive project');
       // Unarchive for cleanup
-      await api('POST', `/projects/${projectId}`, { is_archived: false });
+      await api('POST', `/projects/${projectId}`, {
+        title: current.title,
+        is_archived: false,
+      });
     }
   } catch (e) {
     fail('archive project', (e as Error).message);

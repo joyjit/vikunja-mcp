@@ -120,6 +120,18 @@ export function validateMoveConstraints(
 
   try {
     getMaxSubtreeDepth(projectId, updatedProjects);
+
+    // Combined depth: parent chain + moved subtree must stay within limit
+    if (newParentId !== undefined) {
+      const parentDepth = calculateProjectDepth(newParentId, allProjects);
+      const subtreeDepth = getMaxSubtreeDepth(projectId, allProjects);
+      if (parentDepth + subtreeDepth >= MAX_PROJECT_DEPTH) {
+        throw new MCPError(
+          ErrorCode.VALIDATION_ERROR,
+          `Move would exceed the maximum depth of ${MAX_PROJECT_DEPTH} levels`,
+        );
+      }
+    }
   } catch (error) {
     if (error instanceof MCPError && error.code === ErrorCode.INTERNAL_ERROR) {
       throw new MCPError(

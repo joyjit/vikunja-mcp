@@ -24,6 +24,27 @@ const MAX_FILTER_LENGTH = 1000;
 const MAX_VALUE_LENGTH = 200;
 const ALLOWED_CHARS = /^[\t\n\r\u0020-\u007D\u00C0-\u017F\u4E00-\u9FFF]*$/;
 
+/** Fields accepted by the simple single-condition filter helper */
+const SIMPLE_FILTER_FIELDS = new Set([
+  'id', 'title', 'description', 'done', 'priority', 'due_date', 'dueDate',
+  'created', 'updated', 'project_id', 'projectId', 'labels', 'assignees',
+  'percent_done', 'reminder_dates', 'start_date', 'end_date', 'done_at',
+]);
+
+/** Operators accepted by the simple single-condition filter helper */
+const SIMPLE_FILTER_OPERATORS = new Set([
+  '=', '!=', '>', '>=', '<', '<=', 'like', 'LIKE', 'in', 'not in',
+]);
+
+/**
+ * Simple single-condition filter used by legacy helpers and tests.
+ */
+export interface SimpleFilter {
+  field: string;
+  operator: '=' | '!=' | '>' | '<' | '>=' | '<=' | 'like' | 'in' | 'not in';
+  value: unknown;
+}
+
 /**
  * Pre-compiled optimized regex patterns for performance and security
  * Using atomic groups, possessive quantifiers, and non-backtracking patterns to prevent ReDoS
@@ -128,6 +149,20 @@ export const SecurityValidator = {
       };
     }
     return { isValid: true };
+  },
+
+  /**
+   * Validates filter field names for simple filters
+   */
+  validateField(field: string): boolean {
+    return SIMPLE_FILTER_FIELDS.has(field);
+  },
+
+  /**
+   * Validates filter operators for simple filters
+   */
+  validateOperator(operator: string): boolean {
+    return SIMPLE_FILTER_OPERATORS.has(operator);
   }
 };
 
@@ -927,4 +962,165 @@ export class FilterBuilder {
   validate(config?: FilterValidationConfig): FilterValidationResult {
     return validateFilterExpression(this.build(), config);
   }
+}
+
+/**
+ * Parse a simple single-condition filter ("field operator value").
+ * Returns null when the input is empty, too long, or not a valid simple expression.
+ */
+export function parseSimpleFilter(filterStr: string): SimpleFilter | null {
+  if (typeof filterStr !== 'string' || filterStr.length === 0 || filterStr.length > 200) {
+    return null;
+  }
+
+  const match = filterStr.match(/^(\w+)\s*(=|!=|>=|<=|>|<|like|in|not in)\s*(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const field = match[1];
+  const operator = match[2];
+  const valueStr = match[3];
+
+  if (
+    !field ||
+    !operator ||
+    !valueStr ||
+    !SIMPLE_FILTER_FIELDS.has(field) ||
+    !SIMPLE_FILTER_OPERATORS.has(operator)
+  ) {
+    return null;
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(valueStr);
+  } catch {
+    value = valueStr;
+  }
+
+  return {
+    field,
+    operator: operator.toLowerCase() === 'like' ? 'like' : (operator as SimpleFilter['operator']),
+    value,
+  };
+}
+
+type TaskLike = Record<string, unknown>;
+
+function getTaskPropertyValue(
+  task: TaskLike,
+  field: string,
+): string | number | boolean | string[] | number[] | null | undefined {
+  const value = task[field];
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.every((item): item is string => typeof item === 'string')) {
+      return value;
+    }
+    if (value.every((item): item is number => typeof item === 'number')) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function compareScalarValues(
+  taskValue: string | number | boolean | string[] | number[] | null | undefined,
+  filterValue: unknown,
+  operator: '>' | '>=' | '<' | '<=',
+): boolean {
+  if (Array.isArray(taskValue)) {
+    return false;
+  }
+  if (typeof taskValue === 'number' && typeof filterValue === 'number') {
+    switch (operator) {
+      case '>': return taskValue > filterValue;
+      case '>=': return taskValue >= filterValue;
+      case '<': return taskValue < filterValue;
+      case '<=': return taskValue <= filterValue;
+    }
+  }
+
+  if (typeof taskValue === 'string' && (typeof filterValue === 'string' || typeof filterValue === 'number')) {
+    const taskTime = Date.parse(taskValue);
+    const filterTime = Date.parse(String(filterValue));
+    if (!Number.isNaN(taskTime) && !Number.isNaN(filterTime)) {
+      switch (operator) {
+        case '>': return taskTime > filterTime;
+        case '>=': return taskTime >= filterTime;
+        case '<': return taskTime < filterTime;
+        case '<=': return taskTime <= filterTime;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Apply a simple filter to an in-memory task list.
+ */
+export function applyClientSideFilter<T extends TaskLike>(
+  tasks: T[],
+  filter: SimpleFilter | null,
+): T[] {
+  if (!filter) {
+    return tasks;
+  }
+
+  return tasks.filter((task) => {
+    const taskValue = getTaskPropertyValue(task, filter.field);
+    const filterValue = filter.value;
+
+    switch (filter.operator) {
+      case '=':
+        return taskValue === filterValue;
+      case '!=':
+        return taskValue !== filterValue;
+      case '>':
+        return compareScalarValues(taskValue, filterValue, '>');
+      case '>=':
+        return compareScalarValues(taskValue, filterValue, '>=');
+      case '<':
+        return compareScalarValues(taskValue, filterValue, '<');
+      case '<=':
+        return compareScalarValues(taskValue, filterValue, '<=');
+      case 'like':
+        return (
+          typeof taskValue === 'string' &&
+          typeof filterValue === 'string' &&
+          taskValue.toLowerCase().includes(filterValue.toLowerCase())
+        );
+      case 'in':
+        if (!Array.isArray(filterValue)) {
+          return false;
+        }
+        if (Array.isArray(taskValue)) {
+          return filterValue.some((value) => taskValue.includes(value as never));
+        }
+        return filterValue.includes(taskValue);
+      case 'not in':
+        if (!Array.isArray(filterValue)) {
+          return true;
+        }
+        if (Array.isArray(taskValue)) {
+          return !filterValue.some((value) => taskValue.includes(value as never));
+        }
+        return !filterValue.includes(taskValue);
+      default:
+        return true;
+    }
+  });
 }

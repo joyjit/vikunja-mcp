@@ -1,4 +1,4 @@
-import { withRetry, isTransientError, RETRY_CONFIG } from '../../src/utils/retry';
+import { withRetry, isTransientError, RETRY_CONFIG, circuitBreakerRegistry } from '../../src/utils/retry';
 import { isAuthenticationError } from '../../src/utils/auth-error-handler';
 import { logger } from '../../src/utils/logger';
 
@@ -10,10 +10,13 @@ jest.mock('../../src/utils/auth-error-handler', () => ({
 describe('retry utility', () => {
   const mockIsAuthenticationError = isAuthenticationError as jest.MockedFunction<typeof isAuthenticationError>;
   
+  const noBreaker = { enableCircuitBreaker: false };
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockIsAuthenticationError.mockReturnValue(false);
+    circuitBreakerRegistry.clear();
   });
 
   afterEach(() => {
@@ -24,7 +27,7 @@ describe('retry utility', () => {
     it('should return result on successful operation', async () => {
       const operation = jest.fn().mockResolvedValue('success');
       
-      const result = await withRetry(operation);
+      const result = await withRetry(operation, noBreaker);
       
       expect(result).toBe('success');
       expect(operation).toHaveBeenCalledTimes(1);
@@ -39,7 +42,7 @@ describe('retry utility', () => {
         .mockRejectedValueOnce(authError)
         .mockResolvedValueOnce('success');
       
-      const promise = withRetry(operation);
+      const promise = withRetry(operation, noBreaker);
       
       // First retry after 1000ms
       await jest.advanceTimersByTimeAsync(1000);
@@ -60,7 +63,7 @@ describe('retry utility', () => {
         .mockRejectedValueOnce(networkError)
         .mockResolvedValueOnce('success');
       
-      const promise = withRetry(operation);
+      const promise = withRetry(operation, noBreaker);
       
       await jest.advanceTimersByTimeAsync(1000);
       
@@ -76,7 +79,7 @@ describe('retry utility', () => {
       
       const operation = jest.fn().mockRejectedValue(authError);
       
-      const promise = withRetry(operation, { maxRetries: 2 });
+      const promise = withRetry(operation, { ...noBreaker, maxRetries: 2 });
       
       // Handle the rejection to avoid unhandled promise rejection
       promise.catch(() => {});
@@ -95,7 +98,7 @@ describe('retry utility', () => {
       
       const operation = jest.fn().mockRejectedValue(validationError);
       
-      await expect(withRetry(operation)).rejects.toThrow('Invalid input');
+      await expect(withRetry(operation, noBreaker)).rejects.toThrow('Invalid input');
       expect(operation).toHaveBeenCalledTimes(1);
     });
 
@@ -108,6 +111,7 @@ describe('retry utility', () => {
         .mockResolvedValueOnce('success');
       
       const promise = withRetry(operation, {
+        ...noBreaker,
         maxRetries: 1,
         initialDelay: 500,
         maxDelay: 5000,
@@ -131,6 +135,7 @@ describe('retry utility', () => {
       const operation = jest.fn().mockRejectedValue(error);
       
       const promise = withRetry(operation, {
+        ...noBreaker,
         maxRetries: 5,
         initialDelay: 1000,
         maxDelay: 3000,
@@ -159,7 +164,7 @@ describe('retry utility', () => {
         .mockResolvedValueOnce('success');
       
       // String errors are not retryable by default
-      await expect(withRetry(operation)).rejects.toBe('String error');
+      await expect(withRetry(operation, noBreaker)).rejects.toBe('String error');
       expect(operation).toHaveBeenCalledTimes(1);
     });
 
@@ -175,6 +180,7 @@ describe('retry utility', () => {
       });
       
       const promise = withRetry(operation, {
+        ...noBreaker,
         maxRetries: 3,
         initialDelay: 100,
         backoffFactor: 2

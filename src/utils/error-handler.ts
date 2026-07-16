@@ -154,18 +154,34 @@ class SecureErrorHandler {
       );
     }
 
-    // For status code errors, convert non-Error objects to "Unknown error"
-    let message: string;
-    if (error instanceof Error) {
-      message = error.message;
-    } else if (typeof error === 'string') {
-      message = error;
-    } else {
-      message = 'Unknown error';
-    }
-
+    const message = this.extractMessage(error);
     const sanitized = this.sanitize(message);
     return new MCPError(ErrorCode.API_ERROR, `Failed to ${operation}: ${sanitized}`);
+  }
+
+  /**
+   * Extract a human-readable message from any thrown value
+   */
+  private extractMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    if (error === null || error === undefined) {
+      return 'Unknown error';
+    }
+    if (typeof error === 'object' && Object.prototype.hasOwnProperty.call(error, 'message')) {
+      return (error as { message: unknown }).message as string;
+    }
+    if (typeof error === 'object') {
+      return 'Unknown error';
+    }
+    if (typeof error === 'number' || typeof error === 'boolean') {
+      return String(error);
+    }
+    return 'Unknown error';
   }
 
   /**
@@ -176,26 +192,7 @@ class SecureErrorHandler {
       return error;
     }
 
-    let message: string;
-    if (error instanceof Error) {
-      message = error.message;
-    } else if (typeof error === 'string') {
-      message = error;
-    } else if (error === null || error === undefined) {
-      message = 'Unknown error';
-    } else if (typeof error === 'object' && Object.prototype.hasOwnProperty.call(error, 'message')) {
-      // Plain objects with message property
-      message = (error as { message: unknown }).message as string;
-    } else if (typeof error === 'object') {
-      // Plain objects without message property become "Unknown error"
-      message = 'Unknown error';
-    } else if (typeof error === 'number' || typeof error === 'boolean') {
-      // Handle primitives explicitly
-      message = String(error);
-    } else {
-      // Fallback for symbol, bigint, etc.
-      message = 'Unknown error';
-    }
+    const message = this.extractMessage(error);
 
     const sanitized = this.sanitize(message);
 
@@ -220,7 +217,7 @@ class SecureErrorHandler {
       return this.handleStatusCode(error, operation, resourceId, customMessage);
     }
 
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = this.extractMessage(error);
     const sanitized = this.sanitize(message);
 
     return new MCPError(

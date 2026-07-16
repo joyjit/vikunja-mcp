@@ -511,6 +511,15 @@ describe('Projects Tool - Nested Project Features', () => {
         parent_project_id: undefined,
       });
       mockClient.projects.getProjects.mockResolvedValue(deepProjects);
+      mockClient.projects.getProject.mockImplementation((id: number) => {
+        const project = deepProjects.find(p => p.id === id);
+        if (project) {
+          return Promise.resolve(project);
+        }
+        const error: any = new Error('Not found');
+        error.statusCode = 404;
+        return Promise.reject(error);
+      });
 
       await expect(callTool('update', { id: 11, parentProjectId: 10 })).rejects.toThrow(
         /Maximum allowed depth is 10 levels/,
@@ -662,9 +671,10 @@ describe('Projects Tool - Nested Project Features', () => {
         owner: mockUser,
       });
 
-      // The move should still work because getMaxSubtreeDepth handles duplicate IDs
-      const result = await callTool('move', { id: 1, parentProjectId: undefined });
-      expect(result).toBeDefined();
+      // Circular hierarchy data triggers move validation
+      await expect(callTool('move', { id: 1, parentProjectId: undefined })).rejects.toThrow(
+        'Move would create a circular reference in project hierarchy',
+      );
     });
 
     it('should handle projects without id in getMaxSubtreeDepth', async () => {
@@ -706,10 +716,10 @@ describe('Projects Tool - Nested Project Features', () => {
 
     it('should throw API_ERROR when move fails with non-MCP error', async () => {
       mockClient.projects.getProjects.mockResolvedValue(mockProjects);
-      mockClient.projects.updateProject.mockRejectedValue(new Error('Permission denied'));
+      mockClient.projects.updateProject.mockRejectedValue(new Error('Access forbidden'));
 
       await expect(callTool('move', { id: 5, parentProjectId: 1 })).rejects.toThrow(
-        'Failed to move project: Permission denied',
+        'Failed to move project: Access forbidden',
       );
     });
 

@@ -17,8 +17,31 @@ class Logger {
   };
 
   constructor() {
-    // AORP requires comprehensive logging - always enable debug level
-    this.level = LogLevel.DEBUG;
+    this.level = this.resolveLevel();
+  }
+
+  private resolveLevel(): LogLevel {
+    const rawLevel = process.env.LOG_LEVEL?.toLowerCase();
+    const levelMap: Record<string, LogLevel> = {
+      error: LogLevel.ERROR,
+      warn: LogLevel.WARN,
+      info: LogLevel.INFO,
+      debug: LogLevel.DEBUG,
+    };
+
+    if (rawLevel) {
+      const mapped = levelMap[rawLevel];
+      if (mapped !== undefined) {
+        return mapped;
+      }
+    }
+
+    if (process.env.DEBUG === 'true') {
+      return LogLevel.DEBUG;
+    }
+
+    // Invalid LOG_LEVEL with DEBUG=true is handled above; otherwise default INFO
+    return LogLevel.INFO;
   }
 
   private log(level: LogLevel, message: string, ...args: unknown[]): void {

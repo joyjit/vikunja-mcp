@@ -8,6 +8,7 @@ import { createTask, getTask, updateTask, deleteTask } from '../../src/tools/tas
 import { MCPError, ErrorCode } from '../../src/types';
 import type { MockVikunjaClient } from '../types/mocks';
 import { parseMarkdown } from '../utils/markdown';
+import { circuitBreakerRegistry } from '../../src/utils/retry';
 
 // Mock the client module
 jest.mock('../../src/client', () => ({
@@ -30,6 +31,7 @@ describe('Tasks CRUD - Edge Cases and Defensive Programming', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    circuitBreakerRegistry.clear();
 
     // Setup mock client with all required methods
     mockClient = {
@@ -371,7 +373,7 @@ describe('Tasks CRUD - Edge Cases and Defensive Programming', () => {
       mockClient.tasks.deleteTask.mockRejectedValue({ status: 500, message: 'Server error' });
 
       await expect(deleteTask({ id: 1 })).rejects.toThrow(
-        'Failed to delete task: Unknown error'
+        'Failed to delete task: Server error'
       );
     });
 
@@ -396,7 +398,7 @@ describe('Tasks CRUD - Edge Cases and Defensive Programming', () => {
       mockClient.tasks.getTask.mockRejectedValue({ code: 404, message: 'Not found' });
 
       await expect(getTask({ id: 1 })).rejects.toThrow(
-        'Failed to get task: Unknown error'
+        'Failed to get task: Not found'
       );
     });
 

@@ -1,0 +1,46 @@
+name: MCP Canary
+
+# Non-blocking probe against upstream Vikunja `latest` (current stable).
+# PR gate stays on the pinned image (see mcp-integration.yml).
+# When a new release ships, `latest` moves first; this job flags API drift
+# before we bump the pin. Weekly is enough — stable releases are infrequent.
+# See docs/MCP-INTEGRATION-CI.md.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VIKUNJA_IMAGE: vikunja/vikunja:latest
+
+jobs:
+  mcp-canary:
+    name: Latest Vikunja + MCP suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Pull canary Vikunja image
+        run: docker pull "$VIKUNJA_IMAGE"
+
+      - name: Start Vikunja, run MCP tests, tear down
+        run: npm run test:mcp

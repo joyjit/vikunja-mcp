@@ -8,6 +8,12 @@ import { logger } from './logger';
 import { isAuthenticationError } from './auth-error-handler';
 
 /**
+ * Per-breaker default operation used when fire() is called with no args.
+ * Keyed by breaker name so construction does not self-reference.
+ */
+const breakerDefaultOps = new Map<string, () => Promise<unknown>>();
+
+/**
  * Simple circuit breaker registry for tracking and managing circuit breakers
  */
 class CircuitBreakerRegistry {
@@ -31,6 +37,19 @@ class CircuitBreakerRegistry {
       });
     });
     await Promise.all(promises);
+  }
+
+  /** Remove all registered breakers (for tests). */
+  clear(): void {
+    for (const breaker of this.breakers.values()) {
+      try {
+        breaker.shutdown();
+      } catch {
+        // ignore shutdown errors in tests
+      }
+    }
+    this.breakers.clear();
+    breakerDefaultOps.clear();
   }
 
   getAllStats(): Record<string, unknown> {
@@ -69,10 +88,16 @@ export interface RetryOptions {
   initialDelay?: number;
   backoffFactor?: number;
   maxDelay?: number;
+  /** When false, run the operation directly without a circuit breaker. Default true. */
+  enableCircuitBreaker?: boolean;
+  /** Named circuit breaker key. Defaults to a unique per-call name. */
+  circuitBreakerName?: string;
 }
 
 // Production-ready defaults
-const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'shouldRetry'>> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<RetryOptions, 'shouldRetry' | 'enableCircuitBreaker' | 'circuitBreakerName'>
+> = {
   maxRetries: 3,
   timeout: 30000,
   resetTimeout: 30000,
@@ -84,32 +109,42 @@ const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'shouldRetry'>> = {
 };
 
 /**
- * Simple circuit breaker factory using opossum directly
+ * Simple circuit breaker factory using opossum directly.
+ * Named breakers are reused. Call fire(operation) to run a fresh closure,
+ * or fire() to run the operation provided at creation time.
  */
 export function createCircuitBreaker<T>(
   operation: () => Promise<T>,
   name: string,
   options: RetryOptions = {}
 ): CircuitBreaker {
-  // Check if a circuit breaker with this name already exists
   const existingBreaker = circuitBreakerRegistry.get(name);
   if (existingBreaker) {
+    breakerDefaultOps.set(name, operation as () => Promise<unknown>);
     return existingBreaker;
   }
 
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  breakerDefaultOps.set(name, operation as () => Promise<unknown>);
 
-  const breaker = new CircuitBreaker(operation, {
-    timeout: opts.timeout,
-    resetTimeout: opts.resetTimeout,
-    errorThresholdPercentage: opts.errorThresholdPercentage,
-    volumeThreshold: opts.volumeThreshold
-  });
+  const breaker: CircuitBreaker = new CircuitBreaker(
+    (op?: () => Promise<unknown>): Promise<unknown> => {
+      const fn = typeof op === 'function' ? op : breakerDefaultOps.get(name);
+      if (typeof fn !== 'function') {
+        return Promise.reject(new Error(`Circuit breaker ${name} has no operation to run`));
+      }
+      return fn();
+    },
+    {
+      timeout: opts.timeout,
+      resetTimeout: opts.resetTimeout,
+      errorThresholdPercentage: opts.errorThresholdPercentage,
+      volumeThreshold: opts.volumeThreshold,
+    },
+  );
 
-  // Register with the global registry
   circuitBreakerRegistry.register(name, breaker);
 
-  // Essential logging only
   breaker.on('open', () => logger.warn(`Circuit breaker ${name} opened`));
   breaker.on('close', () => logger.info(`Circuit breaker ${name} closed`));
 
@@ -124,31 +159,32 @@ export async function withRetry<T>(
   options: RetryOptions = {}
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  const enableCircuitBreaker = options.enableCircuitBreaker !== false;
   let lastError: unknown;
   let delay = opts.initialDelay || 1000;
+  const breakerName =
+    options.circuitBreakerName || `anonymous-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   for (let attempt = 0; attempt <= (opts.maxRetries || 3); attempt++) {
     try {
-      // Use circuit breaker for the operation
-      const breaker = createCircuitBreaker(operation, 'anonymous', opts);
-      return await breaker.fire() as Promise<T>;
+      if (!enableCircuitBreaker) {
+        return await operation();
+      }
+      const breaker = createCircuitBreaker(operation, breakerName, opts);
+      return await breaker.fire(operation) as Promise<T>;
     } catch (error) {
       lastError = error;
 
-      // Check if we should retry this error
       const shouldRetry = opts.shouldRetry
         ? opts.shouldRetry(error as Error)
         : isRetryableError(error as Error);
 
-      // If this is the last attempt or error is not retryable, throw
       if (attempt === (opts.maxRetries || 3) || !shouldRetry) {
         throw error;
       }
 
-      // Log retry attempt
-      logger.debug(`Retry attempt ${attempt + 1}/${opts.maxRetries || 3} after ${delay}ms`);
+      logger.debug(`Retrying operation after ${delay}ms`);
 
-      // Wait before retrying with exponential backoff
       await new Promise(resolve => setTimeout(resolve, delay));
       delay = Math.min(delay * (opts.backoffFactor || 2), opts.maxDelay || 30000);
     }
@@ -166,7 +202,7 @@ export async function withNamedRetry<T>(
   options: RetryOptions = {}
 ): Promise<T> {
   const breaker = createCircuitBreaker(operation, name, options);
-  return breaker.fire() as Promise<T>;
+  return breaker.fire(operation) as Promise<T>;
 }
 
 /**

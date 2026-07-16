@@ -245,7 +245,7 @@ describe('Task Relations Tool', () => {
           otherTaskId: 2,
           relationKind: 'subtask',
         }),
-      ).rejects.toThrow('Failed to create task relation');
+      ).rejects.toThrow('vikunja_tasks_relations.create task relation failed: API Error');
     });
 
     it('should handle non-Error thrown values', async () => {
@@ -258,7 +258,7 @@ describe('Task Relations Tool', () => {
           otherTaskId: 2,
           relationKind: 'subtask',
         }),
-      ).rejects.toThrow('Failed to create task relation: String error thrown');
+      ).rejects.toThrow('vikunja_tasks_relations.create task relation failed: String error thrown');
     });
   });
 
@@ -327,7 +327,7 @@ describe('Task Relations Tool', () => {
           otherTaskId: 2,
           relationKind: 'subtask',
         }),
-      ).rejects.toThrow('Failed to remove task relation');
+      ).rejects.toThrow('vikunja_tasks_relations.remove task relation failed: Not found');
     });
 
     it('should handle non-Error thrown values', async () => {
@@ -340,7 +340,7 @@ describe('Task Relations Tool', () => {
           otherTaskId: 2,
           relationKind: 'subtask',
         }),
-      ).rejects.toThrow('Failed to remove task relation: [object Object]');
+      ).rejects.toThrow('vikunja_tasks_relations.remove task relation failed: Connection failed');
     });
   });
 
@@ -415,7 +415,7 @@ describe('Task Relations Tool', () => {
           subcommand: 'relations',
           id: 1,
         }),
-      ).rejects.toThrow('Failed to get task relations');
+      ).rejects.toThrow('vikunja_tasks_relations.get task relations failed: Task not found');
     });
 
     it('should handle non-Error thrown values', async () => {
@@ -426,7 +426,7 @@ describe('Task Relations Tool', () => {
           subcommand: 'relations',
           id: 1,
         }),
-      ).rejects.toThrow('Failed to get task relations: 12345');
+      ).rejects.toThrow('vikunja_tasks_relations.get task relations failed: 12345');
     });
   });
 

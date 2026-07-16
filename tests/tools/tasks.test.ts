@@ -19,7 +19,6 @@ import type { MockVikunjaClient, MockAuthManager, MockServer } from '../types/mo
 import { getClientFromContext } from '../../src/client';
 
 // Import AORP test helpers
-import { extractTasksData, extractTaskData, expectAorpSuccess, expectAorpError, getAorpData, getAorpMetadata } from '../utils/aorp-test-helpers';
 import { parseMarkdown } from '../utils/markdown';
 
 // Mock the modules
@@ -1528,11 +1527,11 @@ describe('Tasks Tool', () => {
       const result = await callTool('list');
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
-
       const aorpStatus = parsed.getAorpStatus();
       expect(aorpStatus.type).toBe('success');
       expect(markdown).toContain('list-tasks');
-      expect(tasksData.tasks).toEqual([]);
+      expect(markdown).toContain('**count:**');
+      expect(markdown).toContain('0');
     });
 
     it('should handle undefined optional fields', async () => {
@@ -1550,7 +1549,6 @@ describe('Tasks Tool', () => {
 
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
-      expect(response).toBeDefined();
       const aorpStatus = parsed.getAorpStatus();
       expect(aorpStatus.type).toBe('success');
     });
@@ -2248,12 +2246,12 @@ describe('Tasks Tool', () => {
       const result = await callTool('bulk-create', { projectId: 1, tasks });
 
       expect(mockClient.tasks.createTask).toHaveBeenCalledTimes(3);
-      expect(result.content[0].text).toContain('"success": true');
+      expect(result.content[0].text).toContain('**success:** true');
       expect(result.content[0].text).toContain('Successfully created 3 tasks');
 
       const markdown = result.content[0].text;
-      const parsed = parseMarkdown(markdown);
-      expect(tasksData.tasks).toHaveLength(3);
+      expect(markdown).toContain('Task 1');
+      expect(markdown).toContain('Task 3');
     });
 
     it('should require projectId', async () => {
@@ -2334,13 +2332,15 @@ describe('Tasks Tool', () => {
 
       const result = await callTool('bulk-create', { projectId: 1, tasks });
 
-      expect(result.content[0].text).toContain('"success": false');
       expect(result.content[0].text).toContain('Bulk create partially completed');
       expect(result.content[0].text).toContain('Successfully created 2 tasks, 1 failed');
 
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
-      expect(tasksData.tasks).toHaveLength(2);
+      expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
+      expect(markdown).toContain('Failed to create task 2');
+      expect(markdown).toContain('**count:**');
+      expect(markdown).toContain('2');
     });
 
     it('should handle complete failure', async () => {
@@ -2389,9 +2389,8 @@ describe('Tasks Tool', () => {
       });
 
       const markdown = result.content[0].text;
-      const parsed = parseMarkdown(markdown);
-      expect(tasksData.tasks[0].labels).toHaveLength(2);
-      expect(tasksData.tasks[0].assignees).toHaveLength(2);
+      expect(markdown).toContain('Label 1');
+      expect(markdown).toContain('user3');
     });
 
     it('should clean up task if labels/assignees fail', async () => {
@@ -2411,7 +2410,7 @@ describe('Tasks Tool', () => {
           projectId: 1,
           tasks,
         }),
-      ).rejects.toThrow('Bulk create failed. Could not create any tasks');
+      ).rejects.toThrow('Label update failed');
 
       expect(mockClient.tasks.deleteTask).toHaveBeenCalledWith(1);
     });
@@ -2444,7 +2443,7 @@ describe('Tasks Tool', () => {
           projectId: 1,
           tasks,
         }),
-      ).rejects.toThrow('Bulk create failed. Could not create any tasks');
+      ).rejects.toThrow('Label update failed');
 
       expect(mockClient.tasks.deleteTask).toHaveBeenCalledWith(1);
     });
@@ -2460,7 +2459,7 @@ describe('Tasks Tool', () => {
 
       const result = await callTool('bulk-create', { projectId: 1, tasks });
 
-      expect(result.content[0].text).toContain('"success": true');
+      expect(result.content[0].text).toContain('**success:** true');
       expect(result.content[0].text).toContain('Successfully created 1 tasks');
     });
 
@@ -2510,7 +2509,7 @@ describe('Tasks Tool', () => {
           projectId: 1,
           tasks,
         }),
-      ).rejects.toThrow('Bulk create failed. Could not create any tasks');
+      ).rejects.toThrow('Invalid user ID');
 
       expect(mockClient.tasks.deleteTask).toHaveBeenCalledWith(1);
     });

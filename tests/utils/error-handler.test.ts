@@ -66,7 +66,7 @@ describe('Error Handler Utilities', () => {
       
       expect(result).toBeInstanceOf(MCPError);
       expect(result.code).toBe(ErrorCode.API_ERROR);
-      expect(result.message).toBe('Failed to list projects: Unknown error');
+      expect(result.message).toBe('Failed to list projects: Network failure');
     });
 
     it('should handle Error objects without statusCode', () => {

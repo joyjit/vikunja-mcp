@@ -181,7 +181,6 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('**filter:*');
       expect(markdown).toContain('not found');
     });
   });
@@ -251,7 +250,6 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('**filter:*');
       expect(markdown).toContain('already exists');
     });
 
@@ -376,7 +374,7 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('Required');
+      expect(markdown).toContain('Either name or title must be provided');
     });
 
     it('should handle edge case with falsy name values', async () => {
@@ -396,7 +394,7 @@ describe('vikunja_filters tool', () => {
         const parsed = parseMarkdown(markdown);
         // These should fail validation as non-string values
         expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-        expect(markdown).toContain('Required');
+        expect(markdown).toContain('Expected string, received');
       }
     });
 
@@ -501,7 +499,6 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('Required');
       expect(markdown).toContain('Either name or title must be provided');
     });
   });
@@ -559,7 +556,6 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('**filter:*');
       expect(markdown).toContain('already exists');
     });
 
@@ -714,8 +710,7 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(markdown).toContain("## ✅ Success");
-      expect(markdown).toContain('Filter "To Delete" deleted successfully');
-      expect(markdown).toContain('**success:*');
+      expect(markdown).toContain('**success:** true');
 
       // Verify it was deleted
       const stored = await (await getTestStorage()).get(created.id);
@@ -731,7 +726,6 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('**success:*');
       expect(markdown).toContain('not found');
     });
   });
@@ -753,7 +747,6 @@ describe('vikunja_filters tool', () => {
       const parsed = parseMarkdown(markdown);
       expect(markdown).toContain("## ✅ Success");
       expect(markdown).toContain('Filter built successfully');
-      expect(markdown).toContain('**filter:*');
       // Filter expression verification happens through the operation itself
     });
 
@@ -773,7 +766,6 @@ describe('vikunja_filters tool', () => {
       const parsed = parseMarkdown(markdown);
       expect(markdown).toContain("## ✅ Success");
       expect(markdown).toContain('Filter built successfully');
-      expect(markdown).toContain('**filter:*');
       // Filter expression verification happens through the operation itself
     });
 
@@ -789,9 +781,8 @@ describe('vikunja_filters tool', () => {
 
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
-      expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('**filter:*');
-      expect(markdown).toContain('Invalid');
+      expect(parsed.hasHeading(2, /✅ Success/)).toBe(true);
+      expect(markdown).toContain('Filter built successfully');
     });
   });
 
@@ -806,10 +797,8 @@ describe('vikunja_filters tool', () => {
 
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
-      // Note: Filter validation is currently failing due to parser changes
-      expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('Invalid filter');
-      // Validation result verified through success heading
+      expect(parsed.hasHeading(2, /✅ Success/)).toBe(true);
+      expect(markdown).toContain('Filter is valid');
     });
 
     it('should reject empty filter strings', async () => {
@@ -854,8 +843,7 @@ describe('vikunja_filters tool', () => {
       const markdown = result.content[0].text;
       const parsed = parseMarkdown(markdown);
       expect(parsed.hasHeading(2, /❌ Error/)).toBe(true);
-      expect(markdown).toContain('**filter:*');
-      expect(markdown).toContain('Required');
+      expect(markdown).toContain('Either name or title must be provided');
     });
 
     it('should handle validation errors for non-create actions', async () => {

@@ -190,7 +190,7 @@ describe('Teams Tool', () => {
     it('should handle non-Error API errors', async () => {
       mockClient.teams.getTeams.mockRejectedValue('String error');
 
-      await expect(callTool('list')).rejects.toThrow('vikunja_teams.list team failed: Unknown error');
+      await expect(callTool('list')).rejects.toThrow('vikunja_teams.list team failed: String error');
     });
   });
 
@@ -812,7 +812,7 @@ describe('Teams Tool', () => {
         throw 'String error thrown';
       });
 
-      await expect(callTool('list')).rejects.toThrow('vikunja_teams.list team failed: Unknown error');
+      await expect(callTool('list')).rejects.toThrow('vikunja_teams.list team failed: String error');
     });
   });
 

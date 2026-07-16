@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { withRetry, RETRY_CONFIG } from '../src/utils/retry';
+import { withRetry, RETRY_CONFIG, circuitBreakerRegistry } from '../src/utils/retry';
 
 // Mock logger to avoid console spam
 jest.mock('../src/utils/logger');
@@ -12,6 +12,7 @@ jest.mock('../src/utils/logger');
 describe('Circuit Breaker Integration with Retry Logic', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    circuitBreakerRegistry.clear();
   });
 
   it('should use circuit breaker when enabled in retry config', async () => {
@@ -52,7 +53,7 @@ describe('Circuit Breaker Integration with Retry Logic', () => {
     const results = await Promise.all(promises);
 
     // At least one should be blocked by circuit breaker
-    expect(results.some(r => r.includes('Circuit breaker') && r.includes('OPEN'))).toBe(true);
+    expect(results.some(r => /breaker is open/i.test(r))).toBe(true);
 
     // Verify the operation was indeed blocked (limited calls)
     expect(mockOperation).toHaveBeenCalledTimes(5); // Opened after 5 failures (default threshold)

@@ -566,7 +566,7 @@ describe('Labels Tool', () => {
         mockHandler({
           subcommand: 'list',
         }),
-      ).rejects.toThrow('vikunja_labels.list label failed: Unknown error');
+      ).rejects.toThrow('vikunja_labels.list label failed: String error');
     });
   });
 });

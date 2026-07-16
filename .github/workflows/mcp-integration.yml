@@ -5,7 +5,9 @@ name: MCP Integration
 
 on:
   push:
-    branches: [main, develop]
+    # Include this feature branch so we can verify CI before the workflow
+    # exists on main (workflow_dispatch only lists workflows on the default branch).
+    branches: [main, develop, test/mcp-integration-ci]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:

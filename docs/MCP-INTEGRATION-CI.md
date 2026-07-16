@@ -9,7 +9,12 @@ Live tests against a **real Vikunja** in ephemeral Docker. Unit/coverage CI
 2. `scripts/vikunja-docker.ts` — `up` / `down`: wait for health, register a
    user, mint a JWT via login, write `.env.e2e` (**no secrets**).
 3. `scripts/test-mcp.ts` — loads `.env.e2e` if present; runs the suite.
-4. `.github/workflows/mcp-integration.yml` — `npm run test:mcp` on every PR.
+4. `.github/workflows/mcp-integration.yml` — `npm run test:mcp` on every PR
+   (pinned image; a red PR means *your* change broke).
+5. `.github/workflows/mcp-canary.yml` — weekly (Monday) + manual run against
+   `vikunja/vikunja:latest`. Does **not** block PRs; signals when a new stable
+   release drifts from the pin.
+6. `.github/dependabot.yml` — weekly PRs for npm and GitHub Actions.
 
 ## Commands
 
@@ -48,3 +53,21 @@ npm run test:mcp:run
 - Docker + Compose ship on `ubuntu-latest`.
 - Pinned image so a red PR means *your* change broke, not an upstream release.
 - Existing lint / typecheck / coverage job is unchanged.
+
+## Canary (upstream drift)
+
+| | PR gate | Canary |
+| --- | --- | --- |
+| Workflow | `mcp-integration.yml` | `mcp-canary.yml` |
+| Image | `vikunja/vikunja:2.3.0` (pin) | `vikunja/vikunja:latest` |
+| When | every PR / push to main·develop | Mondays 06:00 UTC + `workflow_dispatch` |
+| Blocks merges? | yes | no |
+
+**Why weekly, not daily:** Stable releases are infrequent; weekly is enough lead
+time after `latest` moves. While pin and `latest` match, the canary is a
+near-duplicate of the PR gate (still useful as a scheduled sanity check).
+
+When the canary fails after an upstream release, fix compatibility here, then
+bump the default in `docker/vikunja.e2e.yml` (and the table above). Dependabot
+does not auto-bump that pin — the compose file name is non-standard, and image
+bumps are a deliberate support decision.

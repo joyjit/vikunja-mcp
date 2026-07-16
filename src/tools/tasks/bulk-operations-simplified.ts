@@ -1,6 +1,6 @@
 /**
  * Simplified bulk operations for tasks (~250 lines)
- * Consolidates BulkOperationProcessor, BulkOperationErrorHandler, BulkOperationValidator, and BatchProcessorFactory
+ * Uses BulkOperationValidator + shared batch processor helpers.
  */
 
 import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logger, isAuthenticationError, RETRY_CONFIG, transformApiError, handleFetchError } from '../../index';

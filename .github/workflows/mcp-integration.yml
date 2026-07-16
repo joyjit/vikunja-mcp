@@ -1,0 +1,38 @@
+name: MCP Integration
+
+# Live integration tests against an ephemeral Dockerized Vikunja.
+# No secrets: register + login mint a JWT at runtime. See docs/MCP-INTEGRATION-CI.md.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-integration:
+    name: Vikunja + MCP suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Start Vikunja, run MCP tests, tear down
+        run: npm run test:mcp

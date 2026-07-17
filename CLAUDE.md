@@ -233,7 +233,7 @@ try {
 
 ## Version Requirements
 
-- **Node.js**: 20+ LTS only (no EOL versions)
+- **Node.js**: 24+ Active LTS only (no EOL versions)
 - **TypeScript**: Strict mode enabled
 - **Vikunja**: Compatible with v0.22.1+ (with known API filter limitation)
 

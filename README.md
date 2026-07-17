@@ -50,7 +50,7 @@ All improvements maintain **100% backward compatibility** with existing implemen
 
 ## Requirements
 
-- Node.js 20+ (LTS versions only)
+- Node.js 24+ (Active LTS)
 - Vikunja instance with API access
 - API token (starting with `tk_`) or JWT token for authentication
 

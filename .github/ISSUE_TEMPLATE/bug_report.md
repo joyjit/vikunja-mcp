@@ -27,7 +27,7 @@ const result = await client.someMethod();
 ```
 
 **Environment (please complete the following information):**
- - Node.js version: [e.g. 20.18.0]
+ - Node.js version: [e.g. 24.18.0]
  - Package version: [e.g. 0.1.0]
  - Vikunja version: [e.g. 0.19.0]
 

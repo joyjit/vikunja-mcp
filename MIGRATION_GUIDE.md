@@ -154,7 +154,7 @@ If using Docker, your existing configuration works:
 
 ```dockerfile
 # Existing configuration continues to work
-FROM node:20-alpine
+FROM node:24-alpine
 RUN npm install -g @democratize-technology/vikunja-mcp@latest
 
 ENV VIKUNJA_URL=https://your-vikunja-instance.com/api/v1
@@ -307,7 +307,7 @@ npm install -g @democratize-technology/vikunja-mcp@0.1.0
 ### Docker Users
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 RUN npm install -g @democratize-technology/vikunja-mcp@0.1.0
 # ... rest of your configuration
 ```

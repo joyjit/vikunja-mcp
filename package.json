@@ -1,6 +1,6 @@
 {
   "name": "@joyjit/vikunja-mcp",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Maintained fork of the Vikunja MCP server \u2014 Model Context Protocol tools for Vikunja task management (Vikunja 2.3-ready fixes)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

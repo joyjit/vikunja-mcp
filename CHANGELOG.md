@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.7 — 2026-07-17
+
+Confirm Release workflow npm publish (scope + public access + refreshed `NPM_TOKEN`).
+
 ## 0.2.6 — 2026-07-17
 
 Verify GitHub Release → npm publish with the corrected `NPM_TOKEN` secret (0.2.5 was published manually after the Action token failed).

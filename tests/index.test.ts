@@ -32,7 +32,6 @@ const mockLogger = {
   debug: jest.fn(),
 };
 
-const mockCreateSecureConnectionMessage = jest.fn().mockReturnValue('Secure connection message');
 const mockCreateSecureLogConfig = jest.fn().mockReturnValue({ config: 'test' });
 
 const mockCreateVikunjaClientFactory = jest.fn();
@@ -69,7 +68,6 @@ jest.mock('../src/utils/logger', () => ({
 }));
 
 jest.mock('../src/utils/security', () => ({
-  createSecureConnectionMessage: mockCreateSecureConnectionMessage,
   createSecureLogConfig: mockCreateSecureLogConfig,
 }));
 
@@ -153,14 +151,12 @@ describe('Main Server Entry Point (index.ts)', () => {
       
       require('../src/index');
       
-      expect(mockCreateSecureConnectionMessage).toHaveBeenCalledWith(
-        'https://vikunja.example.com/api/v1',
-        'tk_test123'
-      );
-      expect(mockLogger.info).toHaveBeenCalledWith('Auto-authenticating: Secure connection message');
       expect(mockAuthManager.connect).toHaveBeenCalledWith(
         'https://vikunja.example.com/api/v1',
         'tk_test123'
+      );
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Auto-authenticating from VIKUNJA_URL and VIKUNJA_API_TOKEN',
       );
       expect(mockAuthManager.getAuthType).toHaveBeenCalledTimes(1);
       expect(mockLogger.info).toHaveBeenCalledWith('Using detected auth type: api-token');
@@ -185,7 +181,6 @@ describe('Main Server Entry Point (index.ts)', () => {
       
       require('../src/index');
       
-      expect(mockCreateSecureConnectionMessage).not.toHaveBeenCalled();
       expect(mockAuthManager.connect).not.toHaveBeenCalled();
       expect(mockLogger.info).not.toHaveBeenCalledWith(expect.stringContaining('Auto-authenticating'));
     });
@@ -195,7 +190,6 @@ describe('Main Server Entry Point (index.ts)', () => {
       
       require('../src/index');
       
-      expect(mockCreateSecureConnectionMessage).not.toHaveBeenCalled();
       expect(mockAuthManager.connect).not.toHaveBeenCalled();
       expect(mockLogger.info).not.toHaveBeenCalledWith(expect.stringContaining('Auto-authenticating'));
     });
@@ -203,7 +197,6 @@ describe('Main Server Entry Point (index.ts)', () => {
     it('should not auto-authenticate when both environment variables are missing', () => {
       require('../src/index');
       
-      expect(mockCreateSecureConnectionMessage).not.toHaveBeenCalled();
       expect(mockAuthManager.connect).not.toHaveBeenCalled();
       expect(mockLogger.info).not.toHaveBeenCalledWith(expect.stringContaining('Auto-authenticating'));
     });

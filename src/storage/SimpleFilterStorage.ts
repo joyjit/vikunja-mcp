@@ -292,6 +292,8 @@ export class FilterStorageManager {
         logger.error('Failed to cleanup inactive sessions', { error: error instanceof Error ? error.message : String(error) });
       });
     }, this.CLEANUP_INTERVAL_MS);
+    // Do not keep the process alive solely for session cleanup (tests, short-lived scripts).
+    this.cleanupInterval.unref?.();
   }
 
   private async cleanupInactiveSessions(): Promise<void> {
@@ -369,25 +371,33 @@ export class FilterStorageManager {
 // Global storage manager instance
 export const storageManager = new FilterStorageManager();
 
-// Cleanup on process exit
-process.on('exit', () => {
+/**
+ * Shutdown hooks — kept testable and skipped under Jest so workers
+ * do not register process-wide listeners that call process.exit.
+ */
+export function onProcessExit(): void {
   storageManager.destroy().catch(() => {
     // Ignore errors during shutdown
   });
-});
+}
 
-process.on('SIGINT', () => {
-  storageManager.destroy().then(() => {
-    process.exit(0);
-  }).catch(() => {
-    process.exit(1);
-  });
-});
+export function onProcessSignal(): void {
+  storageManager
+    .destroy()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch(() => {
+      process.exit(1);
+    });
+}
 
-process.on('SIGTERM', () => {
-  storageManager.destroy().then(() => {
-    process.exit(0);
-  }).catch(() => {
-    process.exit(1);
-  });
-});
+export function registerStorageShutdownHandlers(): void {
+  process.on('exit', onProcessExit);
+  process.on('SIGINT', onProcessSignal);
+  process.on('SIGTERM', onProcessSignal);
+}
+
+if (!process.env.JEST_WORKER_ID) {
+  registerStorageShutdownHandlers();
+}

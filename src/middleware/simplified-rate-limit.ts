@@ -305,7 +305,7 @@ export class SecureRateLimitMiddleware {
           toolName,
           minuteBreakerOpen: this.minuteStoreBreaker.opened,
           hourBreakerOpen: this.hourStoreBreaker.opened,
-          error: error instanceof Error ? error.message : String(error),
+          error: String(error),
         });
 
         // SECURITY: Fail-safe - allow the request but log the incident
@@ -320,7 +320,7 @@ export class SecureRateLimitMiddleware {
       // Re-throw other errors
       logger.error('Rate limit check error', {
         toolName,
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       throw error;
     } finally {
@@ -343,7 +343,7 @@ export class SecureRateLimitMiddleware {
     } catch (error) {
       logger.warn('Failed to get current count from MemoryStore', {
         key,
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       return 0; // Fail-safe - assume no hits if we can't check
     }
@@ -428,35 +428,43 @@ export class SecureRateLimitMiddleware {
         const category = TOOL_CATEGORIES[toolName] || 'default';
         const config = this.config[category];
 
-        // Execute with timeout protection (preserved from original)
-        const result = await Promise.race([
-          handler(...args),
-          new Promise<never>((_, reject) => {
-            setTimeout(() => {
-              reject(new MCPError(
-                ErrorCode.TIMEOUT_ERROR,
-                `Tool execution timeout after ${config.executionTimeout}ms`,
-                {
-                  timeout: config.executionTimeout,
-                  toolName,
-                }
-              ));
-            }, config.executionTimeout);
-          }),
-        ]);
+        // Execute with timeout protection — always clear the timer so successful
+        // calls do not leave pending timeouts that keep Jest workers alive.
+        let timeoutId: NodeJS.Timeout | undefined;
+        try {
+          const result = await Promise.race([
+            handler(...args),
+            new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => {
+                reject(new MCPError(
+                  ErrorCode.TIMEOUT_ERROR,
+                  `Tool execution timeout after ${config.executionTimeout}ms`,
+                  {
+                    timeout: config.executionTimeout,
+                    toolName,
+                  }
+                ));
+              }, config.executionTimeout);
+            }),
+          ]);
 
-        // Validate response size
-        this.validateResponseSize(toolName, result);
+          // Validate response size
+          this.validateResponseSize(toolName, result);
 
-        // Log successful execution
-        const executionTime = Date.now() - startTime;
-        logger.debug('Tool executed successfully', {
-          toolName,
-          executionTime,
-          sessionId: getSessionId(),
-        });
+          // Log successful execution
+          const executionTime = Date.now() - startTime;
+          logger.debug('Tool executed successfully', {
+            toolName,
+            executionTime,
+            sessionId: getSessionId(),
+          });
 
-        return result;
+          return result;
+        } finally {
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
+        }
       } catch (error) {
         const executionTime = Date.now() - startTime;
 
@@ -472,7 +480,7 @@ export class SecureRateLimitMiddleware {
         } else {
           logger.error('Tool execution error', {
             toolName,
-            error: error instanceof Error ? error.message : String(error),
+            error: String(error),
             executionTime,
             sessionId: getSessionId(),
           });
@@ -560,7 +568,7 @@ export class SecureRateLimitMiddleware {
       } catch (error) {
         logger.warn('Failed to get rate limit status for category', {
           category,
-          error: error instanceof Error ? error.message : String(error),
+          error: String(error),
         });
         // Continue with other categories - fail-safe approach
       }
@@ -600,7 +608,7 @@ export class SecureRateLimitMiddleware {
       });
     } catch (error) {
       logger.error('Failed to clear rate limit session', {
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       throw error;
     }
@@ -623,7 +631,7 @@ export class SecureRateLimitMiddleware {
       logger.debug('SECURE rate limit stores and circuit breakers cleared');
     } catch (error) {
       logger.error('Failed to clear rate limit data', {
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       throw error;
     }

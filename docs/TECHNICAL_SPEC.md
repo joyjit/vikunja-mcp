@@ -24,7 +24,7 @@ The Vikunja MCP Server enables AI assistants (particularly Claude) to interact w
 ### Technology Stack
 
 - **Language**: TypeScript with strict mode
-- **Runtime**: Node.js 20+ (LTS versions only - no EOL/zombie versions)
+- **Runtime**: Node.js 24+ (Active LTS only - no EOL/zombie versions)
 - **MCP SDK**: @modelcontextprotocol/sdk
 - **API Client**: node-vikunja (NPM package)
 - **Testing**: Jest with mocked responses

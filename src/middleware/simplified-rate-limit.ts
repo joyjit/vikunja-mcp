@@ -428,35 +428,43 @@ export class SecureRateLimitMiddleware {
         const category = TOOL_CATEGORIES[toolName] || 'default';
         const config = this.config[category];
 
-        // Execute with timeout protection (preserved from original)
-        const result = await Promise.race([
-          handler(...args),
-          new Promise<never>((_, reject) => {
-            setTimeout(() => {
-              reject(new MCPError(
-                ErrorCode.TIMEOUT_ERROR,
-                `Tool execution timeout after ${config.executionTimeout}ms`,
-                {
-                  timeout: config.executionTimeout,
-                  toolName,
-                }
-              ));
-            }, config.executionTimeout);
-          }),
-        ]);
+        // Execute with timeout protection — always clear the timer so successful
+        // calls do not leave pending timeouts that keep Jest workers alive.
+        let timeoutId: NodeJS.Timeout | undefined;
+        try {
+          const result = await Promise.race([
+            handler(...args),
+            new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => {
+                reject(new MCPError(
+                  ErrorCode.TIMEOUT_ERROR,
+                  `Tool execution timeout after ${config.executionTimeout}ms`,
+                  {
+                    timeout: config.executionTimeout,
+                    toolName,
+                  }
+                ));
+              }, config.executionTimeout);
+            }),
+          ]);
 
-        // Validate response size
-        this.validateResponseSize(toolName, result);
+          // Validate response size
+          this.validateResponseSize(toolName, result);
 
-        // Log successful execution
-        const executionTime = Date.now() - startTime;
-        logger.debug('Tool executed successfully', {
-          toolName,
-          executionTime,
-          sessionId: getSessionId(),
-        });
+          // Log successful execution
+          const executionTime = Date.now() - startTime;
+          logger.debug('Tool executed successfully', {
+            toolName,
+            executionTime,
+            sessionId: getSessionId(),
+          });
 
-        return result;
+          return result;
+        } finally {
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
+        }
       } catch (error) {
         const executionTime = Date.now() - startTime;
 

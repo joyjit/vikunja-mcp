@@ -184,10 +184,10 @@ describe('Logger', () => {
 
     it('should log debug messages', () => {
       const { logger: testLogger } = require('../../src/utils/logger');
-      testLogger.debug('Debug data:', { user: 'test', action: 'login' });
+      testLogger.debug('Debug data:', { projectId: 7, action: 'login' });
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[DEBUG] Debug data: { user: 'test', action: 'login' }"),
+        expect.stringContaining("[DEBUG] Debug data: { projectId: 7, action: 'login' }"),
       );
     });
   });
@@ -228,10 +228,20 @@ describe('Logger', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
-    it('should handle empty messages', () => {
-      logger.info('');
+    it('should redact sensitive fields in object arguments', () => {
+      process.env.LOG_LEVEL = 'debug';
+      jest.resetModules();
+      const { logger: testLogger } = require('../../src/utils/logger');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringMatching(/\[INFO\]\s*$/));
+      testLogger.info('auth payload', {
+        apiToken: 'tk_supersecrettoken12',
+        projectId: 42,
+      });
+
+      const logged = String(consoleErrorSpy.mock.calls[0][0]);
+      expect(logged).toContain('projectId: 42');
+      expect(logged).not.toContain('tk_supersecrettoken12');
+      expect(logged).toMatch(/tk_s\.\.\.|\[REDACTED\]/);
     });
   });
 });

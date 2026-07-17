@@ -130,9 +130,16 @@
   },
   "overrides": {
     "zod": "^3.25.28",
-    "handlebars": "^4.7.9"
+    "handlebars": "^4.7.9",
+    "test-exclude": "^7.0.2"
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.4.1": true,
+    "esbuild@0.25.12": true,
+    "unrs-resolver@1.11.1": true,
+    "fsevents": false
   }
 }

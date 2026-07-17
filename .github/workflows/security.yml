@@ -12,6 +12,12 @@ permissions:
   security-events: write
   contents: read
 
+# Prefer `main` when actions/checkout runs `git init` (silences master-branch hint).
+env:
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -19,7 +25,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Use Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: '24.x'
 

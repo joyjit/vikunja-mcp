@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5 — 2026-07-17
+
+Republish via GitHub Release so the automated npm publish job completes successfully (0.2.4 is already on the registry; recreating that release could not overwrite it).
+
 ## 0.2.4 — 2026-07-17
 
 Republish to fix broken npm package metadata (0.2.3 was not installable via `npm`/`npx` despite existing on the registry).

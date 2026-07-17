@@ -19,7 +19,7 @@ dotenv.config({ quiet: true });
 
 const server = new McpServer({
   name: 'vikunja-mcp',
-  version: '0.2.7',
+  version: '0.2.8',
 });
 
 const authManager = new AuthManager();

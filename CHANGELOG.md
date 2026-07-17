@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8 — 2026-07-17
+
+Fix Release workflow: write npm auth into setup-node's userconfig (not project `.npmrc`).
+
 ## 0.2.7 — 2026-07-17
 
 Confirm Release workflow npm publish (scope + public access + refreshed `NPM_TOKEN`).

@@ -37,10 +37,13 @@ jobs:
 
       - name: Publish to NPM
         run: |
-          printf '%s\n' \
-            '@joyjit:registry=https://registry.npmjs.org/' \
-            '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' \
-            'always-auth=true' >> .npmrc
+          # setup-node sets NPM_CONFIG_USERCONFIG to a temp .npmrc;
+          # auth must go there (project .npmrc is not used for registry auth).
+          {
+            echo '@joyjit:registry=https://registry.npmjs.org/'
+            echo '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}'
+          } >> "$NPM_CONFIG_USERCONFIG"
+          npm whoami
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 — 2026-07-17
+
+Republish to fix broken npm package metadata (0.2.3 was not installable via `npm`/`npx` despite existing on the registry).
+
 ## 0.2.3 — 2026-07-17
 
 First release of the **`@joyjit/vikunja-mcp`** soft fork (based on democratize-technology/vikunja-mcp).

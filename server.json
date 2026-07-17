@@ -7,13 +7,13 @@
     "url": "https://github.com/joyjit/vikunja-mcp",
     "source": "github"
   },
-  "version": "0.2.3",
+  "version": "0.2.4",
   "packages": [
     {
       "registry_type": "npm",
       "registry_base_url": "https://registry.npmjs.org",
       "identifier": "@joyjit/vikunja-mcp",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "transport": {
         "type": "stdio"
       },
@@ -26,7 +26,7 @@
           "name": "VIKUNJA_URL"
         },
         {
-          "description": "Vikunja API token (tk_…) or JWT",
+          "description": "Vikunja API token (tk_\u2026) or JWT",
           "is_required": true,
           "format": "string",
           "is_secret": true,

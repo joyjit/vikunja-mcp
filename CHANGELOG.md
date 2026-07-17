@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6 — 2026-07-17
+
+Verify GitHub Release → npm publish with the corrected `NPM_TOKEN` secret (0.2.5 was published manually after the Action token failed).
+
 ## 0.2.5 — 2026-07-17
 
 Republish via GitHub Release so the automated npm publish job completes successfully (0.2.4 is already on the registry; recreating that release could not overwrite it).

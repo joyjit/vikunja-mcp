@@ -97,36 +97,31 @@ describe('Input Sanitization Security Tests', () => {
   });
 
   describe('SQL Injection Protection in Filter Values', () => {
-    it('should block SQL injection attempts in filter values', () => {
-      const sqlInjection = "'; DROP TABLE tasks; --";
-
-      // This should be rejected for dangerous SQL patterns
-      expect(() => {
-        sanitizeString(sqlInjection);
-      }).toThrow('contains potentially dangerous content');
+    it('should allow ordinary English that looks like SQL keywords', () => {
+      // Broad SELECT/CREATE/DROP blocklists false-positived on real task titles
+      expect(sanitizeString('Create a migration plan')).toBe('Create a migration plan');
+      expect(sanitizeString('Drop the old logo from the UI')).toBe(
+        'Drop the old logo from the UI'
+      );
+      expect(sanitizeString("'; DROP TABLE tasks; --")).toBe("'; DROP TABLE tasks; --");
     });
 
-    it('should block UNION-based SQL injection', () => {
-      const unionInjection = "' UNION SELECT * FROM users --";
-
-      expect(() => {
-        sanitizeString(unionInjection);
-      }).toThrow('contains potentially dangerous content');
-    });
-
-    it('should block boolean-based SQL injection', () => {
+    it('should pass through boolean-looking strings without HTML encoding', () => {
       const booleanInjection = "' OR '1'='1";
-
-      const result = sanitizeString(booleanInjection);
-      expect(result).not.toContain("'");
-      expect(result).toContain('OR');
+      expect(sanitizeString(booleanInjection)).toBe(booleanInjection);
     });
 
     it('should block time-based SQL injection', () => {
-      const timeInjection = "'; WAITFOR DELAY '00:00:05' --";
+      const timeInjection = "'; WAITFOR DELAY '00:00:05'";
 
       expect(() => {
         sanitizeString(timeInjection);
+      }).toThrow('contains potentially dangerous content');
+    });
+
+    it('should block SQL Server extended procedure injection', () => {
+      expect(() => {
+        sanitizeString('XP_CMDSHELL evil');
       }).toThrow('contains potentially dangerous content');
     });
   });
@@ -205,27 +200,26 @@ describe('Input Sanitization Security Tests', () => {
     it('should block NoSQL injection attempts', () => {
       const nosqlInjection = '{"$gt":""}';
 
-      const result = sanitizeString(nosqlInjection);
-      expect(result).not.toBe(nosqlInjection);
-      expect(result).toContain('&quot;');
+      expect(() => {
+        sanitizeString(nosqlInjection);
+      }).toThrow('contains potentially dangerous content');
     });
 
     it('should block MongoDB operator injection', () => {
       const mongoInjection = '{"$where":"this.password == \'admin\'"}';
 
-      const result = sanitizeString(mongoInjection);
-      expect(result).not.toBe(mongoInjection);
-      expect(result).toContain('&quot;');
+      expect(() => {
+        sanitizeString(mongoInjection);
+      }).toThrow('contains potentially dangerous content');
     });
   });
 
   describe('HTML Attribute Sanitization', () => {
-    it('should reject HTML content that contains tags', () => {
+    it('should pass through safe HTML tags without encoding', () => {
       const htmlContent = '<div class="test">Content with & symbols</div>';
 
       const result = sanitizeString(htmlContent);
-      expect(result).not.toContain('<div');
-      expect(result).toContain('&lt;div');
+      expect(result).toBe(htmlContent);
     });
 
     it('should handle quotes and apostrophes correctly in safe content', () => {
@@ -240,6 +234,12 @@ describe('Input Sanitization Security Tests', () => {
 
       expect(() => {
         sanitizeString(dangerousContent);
+      }).toThrow('contains potentially dangerous content');
+    });
+
+    it('should reject HTML comments', () => {
+      expect(() => {
+        sanitizeString('<!-- malicious -->');
       }).toThrow('contains potentially dangerous content');
     });
   });

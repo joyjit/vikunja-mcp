@@ -29,17 +29,33 @@ describe('Security Validation Utilities', () => {
       expect(result).toBe('This is a valid string');
     });
 
-    it('should escape HTML special characters (when not XSS)', () => {
+    it('should pass through safe strings without HTML encoding (output is JSON API, not HTML)', () => {
       const testCases = [
-        { input: 'Hello <world>', expected: 'Hello &lt;world&gt;' },
-        { input: 'Test "quoted" string', expected: 'Test &quot;quoted&quot; string' },
-        { input: "Test 'single' quotes", expected: 'Test &#x27;single&#x27; quotes' },
-        { input: 'path/to/file', expected: 'path&#x2F;to&#x2F;file' }
+        { input: 'Hello <world>', expected: 'Hello <world>' },
+        { input: 'Test "quoted" string', expected: 'Test "quoted" string' },
+        { input: "Test 'single' quotes", expected: "Test 'single' quotes" },
+        { input: 'path/to/file', expected: 'path/to/file' }
       ];
 
       testCases.forEach(({ input, expected }) => {
         expect(sanitizeString(input)).toBe(expected);
       });
+    });
+
+    it('should pass through everyday task titles that look like SQL keywords', () => {
+      expect(sanitizeString('Create Greenlight rewards system')).toBe(
+        'Create Greenlight rewards system'
+      );
+      expect(sanitizeString('Update the docs')).toBe('Update the docs');
+      expect(sanitizeString('Select a color scheme')).toBe('Select a color scheme');
+      expect(sanitizeString("Jun's suffix")).toBe("Jun's suffix");
+    });
+
+    it('should pass through Vikunja HTML description markup unchanged', () => {
+      const html =
+        '<h2>Problem</h2><p>Details with <code>path/to/file</code>.</p>' +
+        '<ul><li>one</li><li>two</li></ul><hr><pre><code>ls -la</code></pre>';
+      expect(sanitizeString(html)).toBe(html);
     });
 
     it('should throw error for non-string values', () => {
@@ -729,14 +745,18 @@ describe('Security Validation Utilities', () => {
       });
     });
 
-    it('should escape safe HTML content', () => {
-      // Test that safe HTML tags are escaped rather than stripped
+    it('should pass through safe HTML content without encoding (output is JSON API, not HTML)', () => {
+      // Safe formatting tags are not XSS vectors and should pass through unchanged
       const safeInput = '<b>Bold text</b><em>Emphasis</em>';
       const result = sanitizeString(safeInput);
-      // HTML entities should be escaped
-      expect(result).toContain('&lt;b&gt;');
-      expect(result).toContain('&lt;em&gt;');
+      expect(result).toBe('<b>Bold text</b><em>Emphasis</em>');
       expect(typeof result).toBe('string');
+    });
+
+    it('should still block time-delay SQL injection after narrowing keyword checks', () => {
+      expect(() => sanitizeString("'; WAITFOR DELAY '00:00:05'")).toThrow(MCPError);
+      expect(() => sanitizeString('SLEEP(5)')).toThrow(MCPError);
+      expect(() => sanitizeString('BENCHMARK(1000000, sha1(1))')).toThrow(MCPError);
     });
   });
 });

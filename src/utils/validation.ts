@@ -161,17 +161,16 @@ export function sanitizeString(value: string): string {
     /-o-link\s*:/gi,
     /-webkit-binding\s*:/gi,
 
-    // SQL injection patterns
-    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|EXECUTE|TRUNCATE)\b)/gi,
-    /(\b(OR|AND)\s+\d+\s*=\s*\d+)/gi,
-    /(\b(OR|AND)\s+['"].*['"]\s*=\s*['"].*['"])/gi,
+    // SQL injection patterns (narrow: only time-delay/blind injection and
+    // SQL Server procedures — not plain English words like Create/Update/Select)
     /(\b(WAITFOR\s+DELAY|SLEEP\s*\(|BENCHMARK\s*\(|DBMS_PIPE\.RECEIVE_MESSAGE)\b)/gi,
-    /(--|#|\/\*|\*\/)/gi,  // SQL comments
-    /(\b(INFORMATION_SCHEMA|SYS|MASTER|MSDB|MYSQL|PG_CATALOG)\b)/gi,
     /(\b(XP_|SP_)\w+)/gi,  // SQL Server extended procedures
 
+    // HTML comments (XSS vector; previously caught via the removed SQL `--` pattern)
+    /<!--/gi,
+
     // Command injection patterns (more specific to avoid false positives)
-    // Removed the broad shell pattern to allow safe HTML tags that should be escaped instead of rejected
+    // Removed the broad shell pattern to allow safe HTML tags through unchanged
     /(\b(wget|curl|nc|netcat|telnet|ssh|ftp|sftp)\b)/gi,
     /(rm\s+-rf|del\s+\/s|format|fdisk|mkfs)/gi,
     /(>\s*\/dev\/null|2>&1|\|\|)/gi,
@@ -191,12 +190,13 @@ export function sanitizeString(value: string): string {
     /(\|\()([^)]*)(\)\|)/gi,
     /(!\()([^)]*)(\))/gi,
 
-    // NoSQL injection patterns
-    /(\$\w+\s*:)/gi,  // MongoDB operators like $gt, $lt, $where
-    /(\{\s*\$where\s*:)/gi,
-    /(\{\s*\$ne\s*:)/gi,
-    /(\{\s*\$gt\s*:)/gi,
-    /(\{\s*\$regex\s*:)/gi,
+    // NoSQL injection patterns (quoted and unquoted Mongo operator keys)
+    /(\$\w+\s*:)/gi,  // $gt: / $where:
+    /("\$\w+"\s*:)/gi,  // "$gt": / "$where":
+    /(\{\s*"?\$where"?\s*:)/gi,
+    /(\{\s*"?\$ne"?\s*:)/gi,
+    /(\{\s*"?\$gt"?\s*:)/gi,
+    /(\{\s*"?\$regex"?\s*:)/gi,
 
     // HTML5 dangerous attributes
     /formaction\s*=/gi,
@@ -261,17 +261,10 @@ export function sanitizeString(value: string): string {
   normalizedValue = normalizedValue.replace(/\/etc\/passwd/gi, 'etc/passwd');
   normalizedValue = normalizedValue.replace(/c:\\windows\\system32/gi, 'c:/windows/system32');
 
-  // Apply proper HTML escaping (order matters: & must be first)
-  return normalizedValue
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;')
-    .replace(/\\/g, '&#x5C;')  // Escape backslashes too
-    .replace(/`/g, '&#x60;')   // Escape backticks
-    .replace(/=/g, '&#x3D;')   // Escape equals signs in attributes
+  // Do not HTML-encode: callers send JSON to the Vikunja API, which stores
+  // strings as-is. Encoding here corrupts titles (Jun's → Jun&#x27;s) and
+  // Vikunja HTML descriptions (<p>…</p> → &lt;p&gt;…).
+  return normalizedValue;
 }
 
 /**

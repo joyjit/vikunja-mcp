@@ -1,0 +1,69 @@
+# Manual-only: prove GitHub Actions can auth + publish to npm.
+# Publishes a tiny bump of @joyjit/npm-scope-probe (not vikunja-mcp).
+name: NPM Publish Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Use Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@joyjit'
+
+      - name: Configure npm auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          {
+            echo '@joyjit:registry=https://registry.npmjs.org/'
+            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}"
+          } > "$NPM_CONFIG_USERCONFIG"
+          echo "npm_token_len=${#NODE_AUTH_TOKEN}"
+          npm whoami
+
+      - name: Publish probe package bump
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          {
+            echo '@joyjit:registry=https://registry.npmjs.org/'
+            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}"
+          } > "$NPM_CONFIG_USERCONFIG"
+
+          mkdir probe && cd probe
+          CURRENT=$(npm view @joyjit/npm-scope-probe version)
+          NEXT=$(node -e "const v=process.argv[1].split('.').map(Number); v[2]+=1; console.log(v.join('.'))" "$CURRENT")
+          echo "bump ${CURRENT} -> ${NEXT}"
+
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+            fs.writeFileSync(
+              "package.json",
+              JSON.stringify(
+                {
+                  name: "@joyjit/npm-scope-probe",
+                  version,
+                  description: "CI publish probe only — do not use",
+                  license: "MIT",
+                  publishConfig: { access: "public" },
+                },
+                null,
+                2
+              ) + "\n"
+            );
+            fs.writeFileSync("README.md", "CI publish probe only.\n");
+          ' "$NEXT"
+
+          npm publish --access public
+          echo -n "registry now: "
+          npm view @joyjit/npm-scope-probe version

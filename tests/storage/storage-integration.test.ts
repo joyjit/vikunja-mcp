@@ -199,6 +199,17 @@ describe('Storage Integration', () => {
       expect(Array.isArray(stats.memorySessions)).toBe(true);
       expect(Array.isArray(stats.persistentSessions)).toBe(true);
     });
+
+    it('returns empty stats when getAllStats throws', async () => {
+      jest.spyOn(storageManager, 'getAllStats').mockRejectedValueOnce(new Error('stats boom'));
+      const stats = await getAllStorageStats();
+      expect(stats).toEqual({
+        persistentSessions: [],
+        memorySessions: [],
+        totalSessions: 0,
+        totalFilters: 0,
+      });
+    });
   });
 
   describe('healthCheckAllStorage', () => {
@@ -241,6 +252,13 @@ describe('Storage Integration', () => {
       // Should be degraded if persistent storage has issues but memory works
       expect(['healthy', 'degraded']).toContain(healthCheck.overall);
       expect(healthCheck.memory.healthy).toBe(true);
+    });
+
+    it('reports unhealthy when getAllStats throws', async () => {
+      jest.spyOn(storageManager, 'getAllStats').mockRejectedValueOnce(new Error('health boom'));
+      const healthCheck = await healthCheckAllStorage();
+      expect(healthCheck.overall).toBe('unhealthy');
+      expect(healthCheck.memory.healthy).toBe(false);
     });
   });
 

@@ -454,4 +454,103 @@ describe('RateLimitingMiddleware', () => {
       expect(config.default.executionTimeout).toBeGreaterThan(0);
     });
   });
+
+
+  describe('circuit breaker fail-safe and status', () => {
+    it('allows requests when store breaker is open (fail-safe)', async () => {
+      const mockHandler = jest.fn().mockResolvedValue('ok');
+      const wrapped = middleware.withRateLimit('vikunja_auth', mockHandler);
+
+      const breakers = middleware as unknown as {
+        minuteStoreBreaker: { fire: (k: string) => Promise<unknown>; opened: boolean; halfOpen: boolean };
+        hourStoreBreaker: { fire: (k: string) => Promise<unknown>; opened: boolean; halfOpen: boolean };
+      };
+
+      jest.spyOn(breakers.minuteStoreBreaker, 'fire').mockRejectedValue('store down');
+      jest.spyOn(breakers.hourStoreBreaker, 'fire').mockRejectedValue('store down');
+      Object.defineProperty(breakers.minuteStoreBreaker, 'opened', { configurable: true, get: () => true });
+      Object.defineProperty(breakers.minuteStoreBreaker, 'halfOpen', { configurable: true, get: () => false });
+      Object.defineProperty(breakers.hourStoreBreaker, 'opened', { configurable: true, get: () => true });
+      Object.defineProperty(breakers.hourStoreBreaker, 'halfOpen', { configurable: true, get: () => false });
+
+      await expect(wrapped({ test: 1 })).resolves.toBe('ok');
+
+      const status = middleware.getRateLimitStatus('vikunja_auth');
+      expect(status.circuitBreakerStatus.minuteStore).toBe('open');
+      expect(status.circuitBreakerStatus.hourStore).toBe('open');
+
+      const asyncStatus = await middleware.getRateLimitStatusAsync('vikunja_auth');
+      expect(asyncStatus.circuitBreakerStatus.minuteStore).toBe('open');
+      expect(asyncStatus.circuitBreakerStatus.hourStore).toBe('open');
+    });
+
+    it('reports half-open breaker status for minute and hour', async () => {
+      const breakers = middleware as unknown as {
+        minuteStoreBreaker: { opened: boolean; halfOpen: boolean };
+        hourStoreBreaker: { opened: boolean; halfOpen: boolean };
+      };
+      Object.defineProperty(breakers.minuteStoreBreaker, 'opened', { configurable: true, get: () => false });
+      Object.defineProperty(breakers.minuteStoreBreaker, 'halfOpen', { configurable: true, get: () => true });
+      Object.defineProperty(breakers.hourStoreBreaker, 'opened', { configurable: true, get: () => false });
+      Object.defineProperty(breakers.hourStoreBreaker, 'halfOpen', { configurable: true, get: () => true });
+      expect(middleware.getRateLimitStatus().circuitBreakerStatus).toEqual({
+        minuteStore: 'half-open',
+        hourStore: 'half-open',
+      });
+      const asyncStatus = await middleware.getRateLimitStatusAsync();
+      expect(asyncStatus.circuitBreakerStatus).toEqual({
+        minuteStore: 'half-open',
+        hourStore: 'half-open',
+      });
+    });
+
+    it('rethrows non-breaker rate-limit check failures', async () => {
+      const mockHandler = jest.fn().mockResolvedValue('ok');
+      const wrapped = middleware.withRateLimit('vikunja_auth', mockHandler);
+      const breakers = middleware as unknown as {
+        minuteStoreBreaker: { fire: (k: string) => Promise<unknown>; opened: boolean };
+        hourStoreBreaker: { fire: (k: string) => Promise<unknown>; opened: boolean };
+      };
+      jest.spyOn(breakers.minuteStoreBreaker, 'fire').mockRejectedValue(new Error('unexpected'));
+      Object.defineProperty(breakers.minuteStoreBreaker, 'opened', { configurable: true, get: () => false });
+      Object.defineProperty(breakers.hourStoreBreaker, 'opened', { configurable: true, get: () => false });
+      await expect(wrapped({ test: 1 })).rejects.toThrow('unexpected');
+    });
+
+    it('logs clearSession/clearAll failures for Error and non-Error', async () => {
+      const stores = middleware as unknown as {
+        minuteStore: { resetAll: () => Promise<void> };
+        hourStore: { resetAll: () => Promise<void> };
+      };
+      jest.spyOn(stores.minuteStore, 'resetAll').mockRejectedValueOnce(new Error('reset boom'));
+      await expect(middleware.clearSession()).rejects.toThrow('reset boom');
+
+      jest.spyOn(stores.minuteStore, 'resetAll').mockRejectedValueOnce('reset string');
+      await expect(middleware.clearAll()).rejects.toBe('reset string');
+    });
+
+    it('enforces per-hour limit when getCurrentCount returns high hour usage', async () => {
+      const hourly = new SimplifiedRateLimitMiddleware({
+        default: {
+          requestsPerMinute: 100,
+          requestsPerHour: 1,
+          maxRequestSize: 1000,
+          maxResponseSize: 2000,
+          executionTimeout: 1000,
+          enabled: true,
+        },
+      }, true);
+
+      jest
+        .spyOn(hourly as unknown as { getCurrentCount: (k: string, w: number) => Promise<number> }, 'getCurrentCount')
+        .mockImplementation(async (_key: string, windowSeconds: number) =>
+          windowSeconds === 3600 ? 1 : 0,
+        );
+
+      const mockHandler = jest.fn().mockResolvedValue('ok');
+      const wrapped = hourly.withRateLimit('vikunja_auth', mockHandler);
+      await expect(wrapped({ a: 1 })).rejects.toThrow(/per hour/);
+      await hourly.clearSession().catch(() => undefined);
+    });
+  });
 });

@@ -51,9 +51,9 @@ const successResponse = (op: string, msg: string, tasks: Task[], meta: Record<st
  * Resolve bulk-update field value for Vikunja's updateTask payload.
  * Native bulk API used a numeric repeat_mode map; keep that conversion when merging.
  */
-function resolveBulkUpdateValue(field: string | undefined, value: unknown): unknown {
-  if (field === 'repeat_mode' && typeof value === 'string') {
-    return REPEAT_MODE_MAP[value] ?? value;
+export function resolveBulkUpdateValue(field: string | undefined, value: unknown): unknown {
+  if (field === 'repeat_mode' && typeof value === 'string' && value in REPEAT_MODE_MAP) {
+    return REPEAT_MODE_MAP[value];
   }
   return value;
 }
@@ -72,8 +72,8 @@ function resolveBulkUpdateValue(field: string | undefined, value: unknown): unkn
 export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   try {
     validateBulkUpdate(args);
-    // Validation ensures taskIds exists
-    const taskIds = args.taskIds ?? [];
+    // Validated above by validateBulkUpdate
+    const taskIds = args.taskIds as number[];
     const client = await getClientFromContext();
     const fieldValue = resolveBulkUpdateValue(args.field, args.value);
 
@@ -129,8 +129,8 @@ export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: 
 export async function bulkDeleteTasks(args: BulkDeleteArgs): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   try {
     validateBulkDelete(args);
-    // Validation ensures taskIds exists
-    const taskIds = args.taskIds ?? [];
+    // Validated above by validateBulkDelete
+    const taskIds = args.taskIds as number[];
     const client = await getClientFromContext();
 
     const fetchResult = await processors.delete.processBatches(taskIds, async (id) => await client.tasks.getTask(id));
@@ -167,15 +167,14 @@ export async function bulkCreateTasks(args: BulkCreateArgs): Promise<{ content: 
 
   try {
     const client = await getClientFromContext();
-    // Validation ensures projectId and tasks exist
-    const projectId = args.projectId ?? 0;
-    const tasks = args.tasks ?? [];
+    // Validated above by validateBulkCreate
+    const projectId = args.projectId as number;
+    const tasks = args.tasks as BulkCreateTaskData[];
 
     const creationResult = await processors.create.processBatches(
       tasks.map((_, i) => i),
       async (index) => {
-        const t = tasks[index];
-        if (!t) throw new Error(`Task data at index ${index} is undefined`);
+        const t = tasks[index] as BulkCreateTaskData;
 
         const newTask: Task = { title: t.title, project_id: projectId };
         if (t.description !== undefined) newTask.description = t.description;

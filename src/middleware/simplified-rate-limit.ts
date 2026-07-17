@@ -305,7 +305,7 @@ export class SecureRateLimitMiddleware {
           toolName,
           minuteBreakerOpen: this.minuteStoreBreaker.opened,
           hourBreakerOpen: this.hourStoreBreaker.opened,
-          error: error instanceof Error ? error.message : String(error),
+          error: String(error),
         });
 
         // SECURITY: Fail-safe - allow the request but log the incident
@@ -320,7 +320,7 @@ export class SecureRateLimitMiddleware {
       // Re-throw other errors
       logger.error('Rate limit check error', {
         toolName,
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       throw error;
     } finally {
@@ -343,7 +343,7 @@ export class SecureRateLimitMiddleware {
     } catch (error) {
       logger.warn('Failed to get current count from MemoryStore', {
         key,
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       return 0; // Fail-safe - assume no hits if we can't check
     }
@@ -472,7 +472,7 @@ export class SecureRateLimitMiddleware {
         } else {
           logger.error('Tool execution error', {
             toolName,
-            error: error instanceof Error ? error.message : String(error),
+            error: String(error),
             executionTime,
             sessionId: getSessionId(),
           });
@@ -560,7 +560,7 @@ export class SecureRateLimitMiddleware {
       } catch (error) {
         logger.warn('Failed to get rate limit status for category', {
           category,
-          error: error instanceof Error ? error.message : String(error),
+          error: String(error),
         });
         // Continue with other categories - fail-safe approach
       }
@@ -600,7 +600,7 @@ export class SecureRateLimitMiddleware {
       });
     } catch (error) {
       logger.error('Failed to clear rate limit session', {
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       throw error;
     }
@@ -623,7 +623,7 @@ export class SecureRateLimitMiddleware {
       logger.debug('SECURE rate limit stores and circuit breakers cleared');
     } catch (error) {
       logger.error('Failed to clear rate limit data', {
-        error: error instanceof Error ? error.message : String(error),
+        error: String(error),
       });
       throw error;
     }

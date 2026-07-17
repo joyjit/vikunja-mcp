@@ -450,4 +450,42 @@ describe('AuthManager', () => {
       });
     });
   });
+
+  describe('test-only session helpers', () => {
+    it('sets user id and token expiry when authenticated', () => {
+      authManager.connect('https://vikunja.example.com/api/v1', 'tk_test');
+      authManager.setTestUserId('user-42');
+      const expiry = new Date('2030-01-01T00:00:00Z');
+      authManager.setTestTokenExpiry(expiry);
+
+      const session = authManager.getSession();
+      expect(session.userId).toBe('user-42');
+      expect(session.tokenExpiry).toEqual(expiry);
+    });
+
+    it('requires authentication before setting test properties', () => {
+      expect(() => authManager.setTestUserId('x')).toThrow(MCPError);
+      expect(() => authManager.setTestTokenExpiry(new Date())).toThrow(MCPError);
+    });
+
+    it('blocks test helpers outside test/development environments', () => {
+      const originalWorker = process.env.JEST_WORKER_ID;
+      const originalEnv = process.env.NODE_ENV;
+      authManager.connect('https://vikunja.example.com/api/v1', 'tk_test');
+
+      delete process.env.JEST_WORKER_ID;
+      process.env.NODE_ENV = 'production';
+
+      try {
+        expect(() => authManager.setTestUserId('x')).toThrow(/test environments/);
+      } finally {
+        if (originalWorker === undefined) {
+          delete process.env.JEST_WORKER_ID;
+        } else {
+          process.env.JEST_WORKER_ID = originalWorker;
+        }
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+  });
 });

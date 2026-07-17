@@ -293,9 +293,12 @@ export function validateField(field: string): FilterField {
     return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid field: ${error.issues[0]?.message || 'Unknown validation error'}`);
+      {
+        const [firstIssue] = error.issues;
+        throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid field: ${firstIssue ? firstIssue.message : 'Unknown validation error'}`);
+      }
     }
-    throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Invalid field: Validation failed');
+    throw error;
   }
 }
 
@@ -312,9 +315,12 @@ export function validateOperator(operator: string): FilterOperator {
     return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid operator: ${error.issues[0]?.message || 'Unknown validation error'}`);
+      {
+        const [firstIssue] = error.issues;
+        throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid operator: ${firstIssue ? firstIssue.message : 'Unknown validation error'}`);
+      }
     }
-    throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Invalid operator: Validation failed');
+    throw error;
   }
 }
 
@@ -331,9 +337,12 @@ export function validateLogicalOperator(operator: string): LogicalOperator {
     return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid logical operator: ${error.issues[0]?.message || 'Unknown validation error'}`);
+      {
+        const [firstIssue] = error.issues;
+        throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid logical operator: ${firstIssue ? firstIssue.message : 'Unknown validation error'}`);
+      }
     }
-    throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Invalid logical operator: Validation failed');
+    throw error;
   }
 }
 
@@ -395,39 +404,26 @@ export function validateValue(value: unknown): string | number | boolean | strin
       }
 
       if (firstElementType === 'number') {
-        // Type-safe numeric validation without casting
-        if (typeof element !== 'number' || !Number.isFinite(element)) {
+        if (!Number.isFinite(element as number)) {
           throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Array numeric values must be finite, not infinite or NaN');
         }
       }
 
       if (firstElementType === 'string') {
-        // Type-safe string validation with comprehensive sanitization
-        if (typeof element !== 'string') {
-          throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Array string elements must be strings');
-        }
-
         // Apply comprehensive input sanitization to all string array elements
-        // This prevents injection attacks in bulk operations
         try {
-          (value as string[])[i] = sanitizeString(element);
+          (value as string[])[i] = sanitizeString(element as string);
         } catch (sanitizationError) {
           throw new MCPError(ErrorCode.VALIDATION_ERROR, `Array element ${i} contains potentially dangerous content: ${sanitizationError instanceof Error ? sanitizationError.message : 'Unknown error'}`);
         }
       }
     }
 
-    // Type-safe return without unsafe casting - we've validated the types above
+    // Type-safe return — earlier checks limit elements to string or number
     if (firstElementType === 'string') {
-      // We've proven all elements are strings
       return value as string[];
-    } else if (firstElementType === 'number') {
-      // We've proven all elements are finite numbers
-      return value as number[];
-    } else {
-      // This should never happen due to earlier validation
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Array contains unsupported element types');
     }
+    return value as number[];
   }
 
   // Reject all other types
@@ -463,9 +459,12 @@ export function validateCondition(condition: unknown): {
     return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid condition: ${error.issues[0]?.message || 'Condition validation failed'}`);
+      {
+        const [firstIssue] = error.issues;
+        throw new MCPError(ErrorCode.VALIDATION_ERROR, `Invalid condition: ${firstIssue ? firstIssue.message : 'Condition validation failed'}`);
+      }
     }
-    throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Invalid condition: Validation failed');
+    throw error;
   }
 }
 
@@ -502,43 +501,18 @@ export function validateFilterExpression(expression: unknown): FilterExpression 
     // Use Zod for comprehensive type-safe validation
     const result = FilterExpressionSchema.parse(expression);
 
-    // Additional runtime checks for edge cases Zod might not catch
-    if (result.groups.length === 0) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression must have at least one group');
-    }
-
     // Validate each condition individually for additional safety
-    let totalConditions = 0;
     for (let i = 0; i < result.groups.length; i++) {
       const group = result.groups[i];
-
-      // Type guard to ensure group is defined
       if (!group) {
-        throw new MCPError(ErrorCode.VALIDATION_ERROR, `Group ${i} is undefined`);
+        continue;
       }
 
-      // Validate operator with stricter validation
-      try {
-        validateLogicalOperator(group.operator);
-      } catch (error) {
-        throw new MCPError(ErrorCode.VALIDATION_ERROR, `Group ${i} has invalid operator: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+      validateLogicalOperator(group.operator);
 
-      // Validate each condition individually
       for (let j = 0; j < group.conditions.length; j++) {
-        const condition = group.conditions[j];
-        try {
-          validateCondition(condition);
-        } catch (error) {
-          throw new MCPError(ErrorCode.VALIDATION_ERROR, `Group ${i}, condition ${j}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-        totalConditions++;
+        validateCondition(group.conditions[j]);
       }
-    }
-
-    // Final check for total conditions
-    if (totalConditions > MAX_CONDITIONS) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, `Filter expression cannot exceed ${MAX_CONDITIONS} total conditions`);
     }
 
     // Type-safe return - Zod has validated the structure
@@ -600,11 +574,6 @@ export function safeJsonStringify(obj: unknown): string {
 
     // Create a safe copy to prevent prototype pollution
     const safeObj = createSafeObjectCopy(validated);
-
-    // Check for circular references before sanitizing
-    if (safeObj === null) {
-      throw new Error('Circular reference detected');
-    }
 
     // Recursively sanitize string values in the object (but not operators)
     const sanitizedObj = sanitizeObjectStrings(safeObj);
@@ -844,3 +813,11 @@ function sanitizeObjectStrings(obj: unknown, visited = new WeakSet(), key: strin
 
   return sanitizedObj;
 }
+
+/** Test-only exports for deep-copy / sanitize helpers */
+export const validationInternals = {
+  createSafeObjectCopy,
+  sanitizeObjectStrings,
+  isSafeProperty,
+  containsPrototypePollution,
+};

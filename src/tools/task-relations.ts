@@ -68,7 +68,7 @@ export function registerTaskRelationsTool(
         await getClientFromContext();
 
         // Use the existing relation handler
-        return handleRelationSubcommands({
+        return await handleRelationSubcommands({
           subcommand: args.operation,
           id: args.id,
           otherTaskId: args.otherTaskId,

@@ -817,7 +817,7 @@ export function validateFilterExpression(
   }
 
   // Custom validation
-  if (expression.groups) {
+  if (Array.isArray(expression.groups)) {
     expression.groups.forEach((group, groupIndex) => {
       if (!group.conditions || group.conditions.length === 0) {
         errors.push(`Group ${groupIndex + 1} must contain at least one condition`);

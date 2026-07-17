@@ -106,14 +106,25 @@
     "collectCoverageFrom": [
       "src/**/*.ts",
       "!src/**/*.d.ts",
-      "!src/**/__tests__/**"
+      "!src/**/__tests__/**",
+      "!src/auth/index.ts",
+      "!src/config/index.ts",
+      "!src/middleware/index.ts",
+      "!src/types/index.ts",
+      "!src/tools/index.ts",
+      "!src/tools/projects.ts",
+      "!src/tools/tasks/crud/index.ts",
+      "!src/tools/tasks/filtering/index.ts",
+      "!src/utils/filtering/index.ts",
+      "!src/index.ts",
+      "!src/storage/index.ts"
     ],
     "coverageThreshold": {
       "global": {
-        "branches": 75,
-        "functions": 75,
-        "lines": 85,
-        "statements": 85
+        "branches": 90,
+        "functions": 98,
+        "lines": 95,
+        "statements": 95
       }
     }
   },

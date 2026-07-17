@@ -154,6 +154,34 @@ describe('Users Tool', () => {
       expect(markdown).toContain('Current user retrieved successfully');
     });
 
+    it('transforms quirky user field types safely', async () => {
+      const circular: Record<string, unknown> = { nested: true };
+      circular.self = circular;
+
+      mockClient.users.getUser.mockResolvedValue({
+        id: '42',
+        username: 99,
+        email: true,
+        name: { first: 'Ada' },
+        language: circular,
+        timezone: Symbol('tz'),
+        week_start: '2',
+        frontend_settings: null,
+        email_reminders_enabled: 1,
+        overdue_tasks_reminders_enabled: 0,
+        created: 123,
+        updated: false,
+      });
+
+      const result = await callTool('current');
+      expect(result.content[0].text).toContain('## ✅ Success');
+    });
+
+    it('rejects invalid user payloads', async () => {
+      mockClient.users.getUser.mockResolvedValue(null);
+      await expect(callTool('current')).rejects.toThrow(/Invalid user data|User operation error/);
+    });
+
     it('should handle API errors', async () => {
       mockClient.users.getUser.mockRejectedValue(new Error('API Error'));
 

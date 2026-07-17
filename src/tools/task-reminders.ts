@@ -51,19 +51,19 @@ export function registerTaskRemindersTool(
 
         switch (args.operation) {
           case 'add-reminder':
-            return addReminder({
+            return await addReminder({
               id: args.id,
               reminderDate: args.reminderDate || ''
             });
 
           case 'remove-reminder':
-            return removeReminder({
+            return await removeReminder({
               id: args.id,
               reminderId: args.reminderId || 0
             });
 
           case 'list-reminders':
-            return listReminders(args);
+            return await listReminders(args);
 
           default:
             throw new MCPError(

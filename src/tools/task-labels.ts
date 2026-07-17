@@ -50,19 +50,19 @@ export function registerTaskLabelsTool(
 
         switch (args.operation) {
           case 'apply-label':
-            return applyLabels({
+            return await applyLabels({
               id: args.id,
               labels: args.labels || []
             });
 
           case 'remove-label':
-            return removeLabels({
+            return await removeLabels({
               id: args.id,
               labels: args.labels || []
             });
 
           case 'list-labels':
-            return listTaskLabels(args);
+            return await listTaskLabels(args);
 
           default:
             throw new MCPError(

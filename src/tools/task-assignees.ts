@@ -50,19 +50,19 @@ export function registerTaskAssigneesTool(
 
         switch (args.operation) {
           case 'assign':
-            return assignUsers({
+            return await assignUsers({
               id: args.id,
               assignees: args.assignees || []
             });
 
           case 'unassign':
-            return unassignUsers({
+            return await unassignUsers({
               id: args.id,
               assignees: args.assignees || []
             });
 
           case 'list-assignees':
-            return listAssignees(args);
+            return await listAssignees(args);
 
           default:
             throw new MCPError(

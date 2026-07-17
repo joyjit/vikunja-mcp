@@ -15,6 +15,7 @@ import { logger } from '../utils/logger';
 import { storageManager } from '../storage/index';
 import type { TaskListingArgs } from './tasks/types/filters';
 import type { CreateTaskArgs, UpdateTaskArgs, DeleteTaskArgs, GetTaskArgs } from './tasks/crud/index';
+import { createTask, getTask, updateTask, deleteTask } from './tasks/crud/index';
 import { TaskFilteringOrchestrator } from './tasks/filtering/index';
 import { createAuthRequiredError, handleFetchError } from '../utils/error-handler';
 import { createSuccessResponse, formatMcpResponse } from '../utils/simple-response';
@@ -148,43 +149,39 @@ export function registerTaskCrudTool(
         switch (args.operation) {
           case 'list': {
             const storage = await getSessionStorage(authManager);
-            return listTasks(args as Parameters<typeof listTasks>[0], storage);
+            return await listTasks(args as Parameters<typeof listTasks>[0], storage);
           }
 
           case 'create': {
-            const { createTask } = await import('./tasks/crud/index.js');
             // Filter args to ensure required properties are present
             if (args.projectId === undefined) {
               throw new MCPError(ErrorCode.VALIDATION_ERROR, 'projectId is required to create a task');
             }
-            return createTask(args as CreateTaskArgs);
+            return await createTask(args as CreateTaskArgs);
           }
 
           case 'get': {
-            const { getTask } = await import('./tasks/crud/index.js');
             // Filter args to ensure required properties are present
             if (args.id === undefined) {
               throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Task ID is required to get a task');
             }
-            return getTask(args as GetTaskArgs);
+            return await getTask(args as GetTaskArgs);
           }
 
           case 'update': {
-            const { updateTask } = await import('./tasks/crud/index.js');
             // Filter args to ensure required properties are present
             if (args.id === undefined) {
               throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Task ID is required to update a task');
             }
-            return updateTask(args as UpdateTaskArgs);
+            return await updateTask(args as UpdateTaskArgs);
           }
 
           case 'delete': {
-            const { deleteTask } = await import('./tasks/crud/index.js');
             // Filter args to ensure required properties are present
             if (args.id === undefined) {
               throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Task ID is required to delete a task');
             }
-            return deleteTask(args as DeleteTaskArgs);
+            return await deleteTask(args as DeleteTaskArgs);
           }
 
           default:

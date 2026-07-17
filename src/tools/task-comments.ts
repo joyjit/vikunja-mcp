@@ -51,7 +51,7 @@ export function registerTaskCommentsTool(
 
         switch (args.operation) {
           case 'comment':
-            return handleComment(args);
+            return await handleComment(args);
 
           default:
             throw new MCPError(

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { bulkUpdateTasks, bulkDeleteTasks, bulkCreateTasks } from '../../../src/tools/tasks/bulk-operations';
+import { bulkUpdateTasks, bulkDeleteTasks, bulkCreateTasks, resolveBulkUpdateValue } from '../../../src/tools/tasks/bulk-operations';
 import { getClientFromContext } from '../../../src/client';
 import { MCPError, ErrorCode } from '../../../src/types';
 import { isAuthenticationError } from '../../../src/utils/auth-error-handler';
@@ -16,6 +16,12 @@ jest.mock('../../../src/utils/retry');
 jest.mock('../../../src/utils/logger');
 
 describe('Bulk operations', () => {
+  it('resolveBulkUpdateValue maps known modes and passes through others', () => {
+    expect(resolveBulkUpdateValue('repeat_mode', 'month')).toBe(1);
+    expect(resolveBulkUpdateValue('repeat_mode', 'unknown')).toBe('unknown');
+    expect(resolveBulkUpdateValue('done', true)).toBe(true);
+  });
+
   const mockClient = {
     tasks: {
       bulkUpdateTasks: jest.fn(),
@@ -684,6 +690,84 @@ describe('Bulk operations', () => {
 
       const markdown = result.content[0].text;
       expect(markdown).toContain('**count:** 25');
+    });
+  });
+
+
+  describe('network error mapping', () => {
+    it('maps fetch failures on update/delete/create', async () => {
+      (getClientFromContext as jest.Mock).mockRejectedValueOnce(new Error('fetch failed'));
+      await expect(
+        bulkUpdateTasks({ taskIds: [1], field: 'done', value: true }),
+      ).rejects.toThrow();
+
+      (getClientFromContext as jest.Mock).mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      await expect(bulkDeleteTasks({ taskIds: [1] })).rejects.toThrow();
+
+      (getClientFromContext as jest.Mock).mockRejectedValueOnce(new Error('ENOTFOUND dns'));
+      await expect(
+        bulkCreateTasks({ projectId: 1, tasks: [{ title: 'T' }] }),
+      ).rejects.toThrow();
+
+      (getClientFromContext as jest.Mock).mockResolvedValue(mockClient);
+    });
+
+    it('clears assignees and updates empty labels', async () => {
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({
+          id: 1,
+          title: 'T',
+          assignees: [{ id: 9 }],
+        })
+        .mockResolvedValueOnce({
+          id: 1,
+          title: 'T',
+          assignees: [{ id: 9 }],
+        });
+      mockClient.tasks.updateTask.mockResolvedValue({ id: 1, title: 'T' });
+      mockClient.tasks.removeUserFromTask.mockResolvedValue(undefined);
+
+      await bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [] });
+      expect(mockClient.tasks.removeUserFromTask).toHaveBeenCalledWith(1, 9);
+
+      mockClient.tasks.updateTaskLabels.mockResolvedValue(undefined);
+      mockClient.tasks.getTask.mockResolvedValue({ id: 1, title: 'T', labels: [] });
+      await bulkUpdateTasks({ taskIds: [1], field: 'labels', value: [] });
+      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalled();
+    });
+
+    it('handles missing assignees and create labels/assignees', async () => {
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({ id: 1, title: 'T' }) // no assignees
+        .mockResolvedValueOnce({ id: 1, title: 'T' });
+      mockClient.tasks.updateTask.mockResolvedValue({ id: 1, title: 'T' });
+      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
+
+      await bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [3] });
+      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
+
+      mockClient.tasks.createTask.mockResolvedValue({ id: 10, title: 'N' });
+      mockClient.tasks.updateTaskLabels.mockResolvedValue(undefined);
+      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
+      await bulkCreateTasks({
+        projectId: 1,
+        tasks: [{ title: 'N', labels: [1], assignees: [2] }],
+      });
+      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalled();
+      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
+    });
+
+    it('rethrows assignee auth errors during remove', async () => {
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({ id: 1, title: 'T', assignees: [{ id: 2 }] })
+        .mockResolvedValueOnce({ id: 1, title: 'T', assignees: [{ id: 2 }] });
+      mockClient.tasks.updateTask.mockResolvedValue({ id: 1 });
+      (isAuthenticationError as jest.Mock).mockReturnValue(true);
+      mockClient.tasks.removeUserFromTask.mockRejectedValue(new Error('auth'));
+
+      await expect(
+        bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [] }),
+      ).rejects.toThrow(/authentication|Assignee|Retried/i);
     });
   });
 });

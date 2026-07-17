@@ -12,6 +12,7 @@ import { MCPError, ErrorCode } from '../types';
 import { getClientFromContext, setGlobalClientFactory } from '../client';
 import { logger } from '../utils/logger';
 import { createAuthRequiredError } from '../utils/error-handler';
+import { bulkCreateTasks, bulkUpdateTasks, bulkDeleteTasks } from './tasks/bulk-operations';
 
 /**
  * Register task bulk operations tool
@@ -65,7 +66,6 @@ export function registerTaskBulkTool(
 
         switch (args.operation) {
           case 'bulk-create': {
-            const { bulkCreateTasks } = await import('./tasks/bulk-operations.js');
             // Filter out undefined values for type safety
             if (!args.projectId) {
               throw new MCPError(ErrorCode.VALIDATION_ERROR, 'projectId is required for bulk create operations');
@@ -87,11 +87,10 @@ export function registerTaskBulkTool(
               projectId: args.projectId,
               tasks: filteredTasks
             };
-            return bulkCreateTasks(filteredArgs);
+            return await bulkCreateTasks(filteredArgs);
           }
 
           case 'bulk-update': {
-            const { bulkUpdateTasks } = await import('./tasks/bulk-operations.js');
             // Filter out undefined values for type safety
             if (!args.field) {
               throw new MCPError(ErrorCode.VALIDATION_ERROR, 'field is required for bulk update operations');
@@ -101,16 +100,15 @@ export function registerTaskBulkTool(
               field: args.field,
               value: args.value
             };
-            return bulkUpdateTasks(filteredArgs);
+            return await bulkUpdateTasks(filteredArgs);
           }
 
           case 'bulk-delete': {
-            const { bulkDeleteTasks } = await import('./tasks/bulk-operations.js');
             // Filter out undefined values for type safety
             const filteredArgs = {
               taskIds: args.taskIds || []
             };
-            return bulkDeleteTasks(filteredArgs);
+            return await bulkDeleteTasks(filteredArgs);
           }
 
           default:

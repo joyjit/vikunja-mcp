@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9 — 2026-07-17
+
+Fix Release npm auth by overwriting setup-node userconfig (empty token line was winning).
+
 ## 0.2.8 — 2026-07-17
 
 Fix Release workflow: write npm auth into setup-node's userconfig (not project `.npmrc`).

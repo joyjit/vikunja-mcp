@@ -1,4 +1,5 @@
 import { format } from 'util';
+import { sanitizeLogData } from './security';
 
 export enum LogLevel {
   ERROR = 0,
@@ -44,11 +45,28 @@ class Logger {
     return LogLevel.INFO;
   }
 
+  /**
+   * Redact secrets from structured log args before they hit stderr.
+   * Errors keep util.format's readable stack; plain strings stay as-is
+   * (callers must not interpolate credentials into the message).
+   */
+  private sanitizeArgs(args: unknown[]): unknown[] {
+    return args.map((arg) => {
+      if (arg instanceof Error) {
+        return arg;
+      }
+      if (arg !== null && typeof arg === 'object') {
+        return sanitizeLogData(arg);
+      }
+      return arg;
+    });
+  }
+
   private log(level: LogLevel, message: string, ...args: unknown[]): void {
     if (level <= this.level) {
       const timestamp = new Date().toISOString();
       const levelStr = this.levelNames[level];
-      const formattedMessage = format(message, ...args);
+      const formattedMessage = format(message, ...this.sanitizeArgs(args));
 
       // Always use console.error for MCP servers as stdout is reserved for protocol
       console.error(`[${timestamp}] [${levelStr}] ${formattedMessage}`);

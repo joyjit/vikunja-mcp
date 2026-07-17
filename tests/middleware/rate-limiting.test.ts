@@ -273,6 +273,16 @@ describe('RateLimitingMiddleware', () => {
       );
     });
 
+    it('should clear the execution timeout timer after success', async () => {
+      const clearSpy = jest.spyOn(global, 'clearTimeout');
+      const mockHandler = jest.fn().mockResolvedValue('ok');
+      const wrappedHandler = middleware.withRateLimit('vikunja_auth', mockHandler);
+
+      await expect(wrappedHandler({ test: 'data' })).resolves.toBe('ok');
+      expect(clearSpy).toHaveBeenCalled();
+      clearSpy.mockRestore();
+    });
+
     it('should apply different timeouts for different tool categories', async () => {
       const authHandler = jest.fn().mockImplementation(() => 
         new Promise(resolve => setTimeout(() => resolve('auth result'), 1500))

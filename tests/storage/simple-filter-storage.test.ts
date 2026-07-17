@@ -164,7 +164,8 @@ describe('FilterStorageManager', () => {
         if (typeof fn === 'function') {
           scheduled.push(fn as () => void);
         }
-        return 123 as unknown as NodeJS.Timeout;
+        const handle = { unref: jest.fn() } as unknown as NodeJS.Timeout;
+        return handle;
       }) as typeof setInterval);
 
     const failing = new FilterStorageManager();

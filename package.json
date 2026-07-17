@@ -1,7 +1,7 @@
 {
-  "name": "@democratize-technology/vikunja-mcp",
-  "version": "0.2.2",
-  "description": "Model Context Protocol server for Vikunja task management - Simplified architecture with enterprise-grade security and reliability",
+  "name": "@joyjit/vikunja-mcp",
+  "version": "0.2.3",
+  "description": "Maintained fork of the Vikunja MCP server — Model Context Protocol tools for Vikunja task management (Vikunja 2.3-ready fixes)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -45,15 +45,18 @@
     "automation"
   ],
   "author": "Jeremy Green",
+  "contributors": [
+    "Joyjit Nath (fork maintainer)"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/democratize-technology/vikunja-mcp.git"
+    "url": "git+https://github.com/joyjit/vikunja-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/democratize-technology/vikunja-mcp/issues"
+    "url": "https://github.com/joyjit/vikunja-mcp/issues"
   },
-  "homepage": "https://github.com/democratize-technology/vikunja-mcp#readme",
+  "homepage": "https://github.com/joyjit/vikunja-mcp#readme",
   "publishConfig": {
     "access": "public"
   },

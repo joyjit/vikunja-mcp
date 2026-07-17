@@ -239,6 +239,7 @@ try {
 
 ## Repository Configuration
 
-- **Owner**: democratize-technology
+- **Fork owner**: joyjit (`@joyjit/vikunja-mcp` on npm)
+- **Upstream**: democratize-technology/vikunja-mcp
 - **Branch Strategy**: Feature branches required, no direct main commits
 - **PR Requirements**: Documentation updates, test coverage, passing checks

@@ -1,4 +1,16 @@
-# Vikunja MCP Server
+# Vikunja MCP Server (`@joyjit/vikunja-mcp`)
+
+Maintained **fork** of [`democratize-technology/vikunja-mcp`](https://github.com/democratize-technology/vikunja-mcp), published as [`@joyjit/vikunja-mcp`](https://www.npmjs.com/package/@joyjit/vikunja-mcp).
+
+Upstream is slow to merge and release. This fork ships Vikunja **2.3**-ready fixes on a faster cadence while still sending PRs upstream. Prefer upstream once equivalent fixes are released there.
+
+### Fork highlights (vs upstream npm `0.2.0`)
+
+- **No HTML-encoding** of titles/descriptions before API calls (real HTML task bodies work)
+- **bulk-update** preserves fields it was not asked to change
+- **Task `projectId` update** actually moves the task; labels apply on create
+- **Project partial update** keeps title / parent instead of wiping them
+- **Node.js 24** + Dockerized MCP integration CI against Vikunja 2.3
 
 A Model Context Protocol (MCP) server that enables AI assistants to interact with Vikunja task management instances.
 
@@ -58,27 +70,46 @@ All improvements maintain **100% backward compatibility** with existing implemen
 
 ### Option 1: Install from NPM (Recommended)
 
-The easiest way to use vikunja-mcp is through npx in your Claude Desktop or other MCP-compatible client configuration:
-
 ```json
 {
-  "vikunja": {
-    "command": "npx",
-    "args": ["-y", "@democratize-technology/vikunja-mcp"],
-    "env": {
-      "VIKUNJA_URL": "https://your-vikunja-instance.com/api/v1",
-      "VIKUNJA_API_TOKEN": "your-api-token"
+  "mcpServers": {
+    "vikunja": {
+      "command": "npx",
+      "args": ["-y", "@joyjit/vikunja-mcp"],
+      "env": {
+        "VIKUNJA_URL": "https://your-vikunja-instance.com/api/v1",
+        "VIKUNJA_API_TOKEN": "your-api-token"
+      }
     }
   }
 }
 ```
 
-### Option 2: Local Development
+Requires **Node.js 24+**. Use an API token (`tk_…`) or JWT from your Vikunja instance.
 
-For development or customization:
+Pin a version if you want: `"args": ["-y", "@joyjit/vikunja-mcp@0.2.3"]`.
+
+### Option 2: Install from GitHub (no npm needed)
+
+```json
+{
+  "mcpServers": {
+    "vikunja": {
+      "command": "npx",
+      "args": ["-y", "github:joyjit/vikunja-mcp"],
+      "env": {
+        "VIKUNJA_URL": "https://your-vikunja-instance.com/api/v1",
+        "VIKUNJA_API_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+### Option 3: Local Development
 
 ```bash
-git clone https://github.com/democratize-technology/vikunja-mcp.git
+git clone https://github.com/joyjit/vikunja-mcp.git
 cd vikunja-mcp
 npm install
 npm run build
@@ -88,12 +119,14 @@ Then configure your MCP client:
 
 ```json
 {
-  "vikunja": {
-    "command": "node",
-    "args": ["/path/to/vikunja-mcp/dist/index.js"],
-    "env": {
-      "VIKUNJA_URL": "https://your-vikunja-instance.com/api/v1",
-      "VIKUNJA_API_TOKEN": "your-api-token"
+  "mcpServers": {
+    "vikunja": {
+      "command": "node",
+      "args": ["/path/to/vikunja-mcp/dist/index.js"],
+      "env": {
+        "VIKUNJA_URL": "https://your-vikunja-instance.com/api/v1",
+        "VIKUNJA_API_TOKEN": "your-api-token"
+      }
     }
   }
 }

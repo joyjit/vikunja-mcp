@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0 — 2026-07-18
+
+Republish after npm package delete + GitHub release cleanup. First clean release with working CI publish token (bypass 2FA, empty IP allowlist).
+
 ## 0.2.9 — 2026-07-17
 
 Fix Release npm auth by overwriting setup-node userconfig (empty token line was winning).

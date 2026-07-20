@@ -8,7 +8,6 @@
  * - Credential format detection (JWT, API keys, database URIs, etc.)
  * - Protection against encoding bypasses and Unicode attacks
  * - Performance-optimized for large datasets
- * - Integration with input sanitization layer for comprehensive protection
  */
 
 import { sanitizeString } from './validation';
@@ -289,15 +288,8 @@ function sanitizeLogDataInternal(data: unknown, visited: WeakSet<object>): unkno
       return maskCredential(data);
     }
 
-    // Apply input sanitization to all non-credential string values
-    // This provides comprehensive XSS and injection protection
-    try {
-      return sanitizeString(data);
-    } catch {
-      // If sanitization fails, return the original string with fallback protection
-      // This ensures we don't break logging if input contains unexpected content
-      return '[SANITIZATION_FAILED]';
-    }
+    // Pass non-credential strings through (sanitizeString is a type-check only)
+    return sanitizeString(data);
   }
 
   if (typeof data === 'number' || typeof data === 'boolean') {

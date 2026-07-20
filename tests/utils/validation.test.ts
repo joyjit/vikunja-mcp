@@ -1,7 +1,5 @@
 /**
- * Comprehensive test suite for security validation utilities
- * Tests critical security functions: XSS protection, prototype pollution prevention,
- * input validation, and JSON safety functions
+ * Validation utilities tests — filter schema checks and string pass-through
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
@@ -23,13 +21,13 @@ import { MCPError, ErrorCode } from '../../src/types/errors';
 
 describe('Security Validation Utilities', () => {
   describe('sanitizeString', () => {
-    it('should accept valid strings within length limit', () => {
+    it('should accept valid strings', () => {
       const validString = 'This is a valid string';
       const result = sanitizeString(validString);
       expect(result).toBe('This is a valid string');
     });
 
-    it('should pass through safe strings without HTML encoding (output is JSON API, not HTML)', () => {
+    it('should pass through strings without HTML encoding (output is JSON API, not HTML)', () => {
       const testCases = [
         { input: 'Hello <world>', expected: 'Hello <world>' },
         { input: 'Test "quoted" string', expected: 'Test "quoted" string' },
@@ -59,72 +57,41 @@ describe('Security Validation Utilities', () => {
     });
 
     it('should throw error for non-string values', () => {
-      expect(() => sanitizeString(123)).toThrow(MCPError);
-      expect(() => sanitizeString(null)).toThrow(MCPError);
-      expect(() => sanitizeString(undefined)).toThrow(MCPError);
-      expect(() => sanitizeString({})).toThrow(MCPError);
-      expect(() => sanitizeString([])).toThrow(MCPError);
+      expect(() => sanitizeString(123 as unknown as string)).toThrow(MCPError);
+      expect(() => sanitizeString(null as unknown as string)).toThrow(MCPError);
+      expect(() => sanitizeString(undefined as unknown as string)).toThrow(MCPError);
+      expect(() => sanitizeString({} as unknown as string)).toThrow(MCPError);
+      expect(() => sanitizeString([] as unknown as string)).toThrow(MCPError);
     });
 
-    it('should throw error for strings exceeding maximum length', () => {
+    it('should pass through long strings (no local length blocklist)', () => {
       const longString = 'a'.repeat(1001);
-      expect(() => sanitizeString(longString)).toThrow(
-        new MCPError(ErrorCode.VALIDATION_ERROR, 'String value exceeds maximum length of 1000')
-      );
+      expect(sanitizeString(longString)).toBe(longString);
     });
 
-    it('should detect and block XSS patterns', () => {
-      const xssPatterns = [
+    it('should pass through markup and injection-looking strings unchanged', () => {
+      const samples = [
         '<script>',
         '<SCRIPT>',
         '<img src=x onerror=alert(1)>',
         '<body onload=alert(1)>',
         'javascript:alert(1)',
-        'JAVASCRIPT:alert(1)',
         '<iframe>',
-        '<object>',
-        '<embed>',
-        '<link>',
-        '<meta>',
-        '<style>',
-        '<svg>',
         '<!-- malicious script -->',
         'expression(alert(1))',
         'eval("malicious")',
-        'Function("malicious")',
-        '<div onmouseover="alert(1)">',
-        '<a href="javascript:alert(1)">',
         'data:text/html,<script>alert(1)</script>',
-        'data:application/javascript,alert(1)'
-      ];
-
-      // Test that all patterns throw errors
-      xssPatterns.forEach((pattern, index) => {
-        expect(() => sanitizeString(pattern)).toThrow(MCPError);
-      });
-    });
-
-    it('should detect XSS in HTML-encoded content', () => {
-      const encodedXss = [
         '&lt;script&gt;alert(1)&lt;&#x2F;script&gt;',
-        '&lt;img src=x onerror=alert(1)&gt;',
-        '&lt;iframe&gt;',
-        '&lt;svg&gt;'
+        "'; WAITFOR DELAY '00:00:05'",
+        'SLEEP(5)',
+        'BENCHMARK(1000000, sha1(1))',
+        'backup format',
+        'information',
       ];
 
-      encodedXss.forEach(pattern => {
-        expect(() => sanitizeString(pattern)).toThrow(MCPError);
-        expect(() => sanitizeString(pattern)).toThrow('String contains potentially dangerous content');
+      samples.forEach((sample) => {
+        expect(sanitizeString(sample)).toBe(sample);
       });
-    });
-
-    it('should reset regex lastIndex for global patterns', () => {
-      // Test multiple XSS detections to ensure regex state is properly reset
-      const xssString = '<script>alert(1)</script>';
-
-      for (let i = 0; i < 5; i++) {
-        expect(() => sanitizeString(xssString)).toThrow();
-      }
     });
   });
 
@@ -271,9 +238,9 @@ describe('Security Validation Utilities', () => {
       expect(() => validateValue(new Date())).toThrow(MCPError);
     });
 
-    it('should sanitize strings in arrays', () => {
-      const arrayWithXss = ['<script>alert(1)</script>', 'normal string'];
-      expect(() => validateValue(arrayWithXss)).toThrow(MCPError);
+    it('should pass strings in arrays through unchanged', () => {
+      const arrayWithMarkup = ['<script>alert(1)</script>', 'normal string'];
+      expect(validateValue(arrayWithMarkup)).toEqual(arrayWithMarkup);
     });
   });
 
@@ -728,10 +695,9 @@ describe('Security Validation Utilities', () => {
     });
   });
 
-  describe('XSS Protection', () => {
-    it('should reject dangerous content with StorageDataError', () => {
-      // Current security approach: reject dangerous content rather than sanitize
-      const dangerousInputs = [
+  describe('content pass-through', () => {
+    it('should pass markup through unchanged', () => {
+      const inputs = [
         '<script>alert("xss")</script>',
         'javascript:alert("xss")',
         '<img src=x onerror=alert("xss")>',
@@ -740,23 +706,16 @@ describe('Security Validation Utilities', () => {
         'onload="alert(1)"'
       ];
 
-      dangerousInputs.forEach(input => {
-        expect(() => sanitizeString(input)).toThrow(MCPError);
+      inputs.forEach(input => {
+        expect(sanitizeString(input)).toBe(input);
       });
     });
 
     it('should pass through safe HTML content without encoding (output is JSON API, not HTML)', () => {
-      // Safe formatting tags are not XSS vectors and should pass through unchanged
       const safeInput = '<b>Bold text</b><em>Emphasis</em>';
       const result = sanitizeString(safeInput);
       expect(result).toBe('<b>Bold text</b><em>Emphasis</em>');
       expect(typeof result).toBe('string');
-    });
-
-    it('should still block time-delay SQL injection after narrowing keyword checks', () => {
-      expect(() => sanitizeString("'; WAITFOR DELAY '00:00:05'")).toThrow(MCPError);
-      expect(() => sanitizeString('SLEEP(5)')).toThrow(MCPError);
-      expect(() => sanitizeString('BENCHMARK(1000000, sha1(1))')).toThrow(MCPError);
     });
   });
 });

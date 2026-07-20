@@ -54,7 +54,7 @@ export async function createTask(args: CreateTaskArgs): Promise<{ content: Array
       throw new MCPError(ErrorCode.VALIDATION_ERROR, 'title is required to create a task');
     }
 
-    // Sanitize and validate user inputs for comprehensive security
+    // Pass title/description through unchanged (thin Vikunja wrapper)
     const sanitizedTitle = sanitizeString(args.title);
     // Preserve empty strings as they are valid descriptions
     const sanitizedDescription = args.description !== undefined ? sanitizeString(args.description) : undefined;

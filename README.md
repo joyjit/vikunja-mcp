@@ -6,13 +6,14 @@ Upstream is slow to merge and release. This fork ships Vikunja **2.3**-ready fix
 
 ### Fork highlights (vs upstream npm `0.2.0`)
 
+- **Thin wrapper**: task titles/descriptions are passed through to Vikunja unchanged — no local content blocklist (words like “format” or HTML are not rejected here)
 - **No HTML-encoding** of titles/descriptions before API calls (real HTML task bodies work)
 - **bulk-update** preserves fields it was not asked to change
 - **Task `projectId` update** actually moves the task; labels apply on create
 - **Project partial update** keeps title / parent instead of wiping them
 - **Node.js 24** + Dockerized MCP integration CI against Vikunja 2.3
 
-A Model Context Protocol (MCP) server that enables AI assistants to interact with Vikunja task management instances.
+A Model Context Protocol (MCP) server that enables AI assistants to interact with Vikunja task management instances. This fork treats the server as a **thin Vikunja API wrapper**: tool args are validated for shape (IDs, dates, enums), credentials are masked in logs, and DoS limits still apply — but **content policy for titles/descriptions belongs to Vikunja**, not a regex reject list in this process.
 
 ## Features
 
@@ -48,7 +49,7 @@ This release represents a **massive architectural simplification** that eliminat
 ### Zod-Based Filter System (850+ Lines Removed)
 - **Before**: Custom tokenizer, parser, and validator with security vulnerabilities
 - **After**: Secure Zod schema validation with production-ready parsing
-- **Enhanced**: DoS protection, input sanitization, and comprehensive error handling
+- **Enhanced**: DoS protection and comprehensive error handling
 - **Result**: Faster parsing, better security, and enterprise-grade reliability
 
 ### Production-Ready Retry System (580+ Lines Replaced)
@@ -1286,8 +1287,9 @@ This standardized format ensures:
 ## Security & Performance Features
 
 ### Security Enhancements
-- **Zod Schema Validation**: Enterprise-grade input validation with comprehensive type checking
-- **DoS Protection**: Input sanitization, length limits, and character allowlisting
+- **Thin content policy**: Titles and descriptions are forwarded to Vikunja as sent. This server does **not** run a content blocklist (that caused false positives on ordinary English like “format” / “information”). HTML/XSS handling is Vikunja’s responsibility at store/render time.
+- **Zod Schema Validation**: Type and shape checks for tool arguments (IDs, dates, enums, filter structure)
+- **DoS Protection**: Length/nesting limits on filters, rate limits, and payload size restrictions
 - **Credential Protection**: Automatic masking of sensitive tokens and URLs in logs and error messages
 - **Entity Resolution Service**: Robust label and user mapping with defensive error handling for malformed API responses
 - **Rate Limiting**: Configurable request rate limits and payload size restrictions to prevent DoS attacks

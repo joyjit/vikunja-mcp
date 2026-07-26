@@ -6,6 +6,7 @@
 import type { VikunjaClient } from 'node-vikunja';
 import type { AuthManager } from '../auth/AuthManager';
 import type { VikunjaClientConstructor } from '../types/node-vikunja-extended';
+import { patchGetAllTasksForVikunja2 } from './patchGetAllTasks';
 
 /**
  * Factory for creating and managing Vikunja client instances
@@ -38,6 +39,8 @@ export class VikunjaClientFactory {
       }
       
       this.clientInstance = new this.VikunjaClientClass(session.apiUrl, session.apiToken);
+      // Vikunja 2.x: getAllTasks must use /tasks, not /tasks/all
+      patchGetAllTasksForVikunja2(this.clientInstance);
       this.currentApiUrl = session.apiUrl;
       this.currentApiToken = session.apiToken;
     }

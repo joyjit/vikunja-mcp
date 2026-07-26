@@ -346,7 +346,7 @@ describe('simple-response - Task Formatting', () => {
       expect(result).toContain('0 item(s)');
     });
 
-    it('should handle more than 10 items (should not display)', () => {
+    it('should display all items when collection has more than 10', () => {
       const tasks: Task[] = Array.from({ length: 15 }, (_, i) => ({
         id: i + 1,
         project_id: 1,
@@ -364,12 +364,14 @@ describe('simple-response - Task Formatting', () => {
 
       expect(result).toContain('**Results:**');
       expect(result).toContain('15 item(s)');
-      // Items should not be displayed when > 10
-      expect(result).not.toContain('### 1.');
-      expect(result).not.toContain('Task 1');
+      // Items must be included — dropping them was silent data loss (#85)
+      expect(result).toContain('### 1.');
+      expect(result).toContain('Task 1');
+      expect(result).toContain('### 15.');
+      expect(result).toContain('Task 15');
     });
 
-    it('should handle exactly 10 items (should display)', () => {
+    it('should display all items when collection has exactly 10', () => {
       const tasks: Task[] = Array.from({ length: 10 }, (_, i) => ({
         id: i + 1,
         project_id: 1,
@@ -387,11 +389,29 @@ describe('simple-response - Task Formatting', () => {
 
       expect(result).toContain('**Results:**');
       expect(result).toContain('10 item(s)');
-      // Items should be displayed when <= 10
       expect(result).toContain('### 1.');
       expect(result).toContain('Task 1');
       expect(result).toContain('### 10.');
       expect(result).toContain('Task 10');
+    });
+
+    it('should display all items for non-task collections over 10', () => {
+      const projects = Array.from({ length: 12 }, (_, i) => ({
+        id: i + 1,
+        name: `Project ${i + 1}`,
+      }));
+
+      const result = formatSuccessMessage(
+        'list-projects',
+        'Found 12 projects',
+        { projects },
+        { count: 12 }
+      );
+
+      expect(result).toContain('**Results:**');
+      expect(result).toContain('12 item(s)');
+      expect(result).toContain('1. **Project 1** (ID: 1)');
+      expect(result).toContain('12. **Project 12** (ID: 12)');
     });
   });
 });

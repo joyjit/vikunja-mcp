@@ -1,7 +1,7 @@
 {
   "name": "@joyjit/vikunja-mcp",
   "version": "0.3.0",
-  "description": "Maintained fork of the Vikunja MCP server \u2014 Model Context Protocol tools for Vikunja task management (Vikunja 2.3-ready fixes)",
+  "description": "Maintained fork of the Vikunja MCP server — Model Context Protocol tools for Vikunja task management (Vikunja 2.3-ready fixes)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -134,7 +134,10 @@
   "overrides": {
     "zod": "^3.25.28",
     "handlebars": "^4.7.9",
-    "test-exclude": "^7.0.2"
+    "test-exclude": "^7.0.2",
+    "fast-uri": "^3.1.4",
+    "@hono/node-server": "^2.0.5",
+    "brace-expansion": "5.0.8"
   },
   "engines": {
     "node": ">=24.0.0"

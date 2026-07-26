@@ -125,12 +125,13 @@ export function formatSuccessMessage(
 
     if (collection && Array.isArray(collection)) {
       content += `**Results:** ${collection.length} item(s)\n\n`;
-      if (collection.length > 0 && collection.length <= 10) {
+      // Always render items — a <=10 cap previously dropped data (#85).
+      if (collection.length > 0) {
         content += formatDataItems(collection as DataItem[]);
       }
     } else if (Array.isArray(data)) {
       content += `**Results:** ${data.length} item(s)\n\n`;
-      if (data.length > 0 && data.length <= 10) {
+      if (data.length > 0) {
         content += formatDataItems(data as DataItem[]);
       }
     } else if (data && typeof data === 'object') {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 — 2026-07-26
+
+### Fixes
+
+- Pass task content through to Vikunja (no local content blocklist / false rejects)
+- Include all list items in success responses (no silent drop when more than 10)
+- Use `GET /tasks` for getAllTasks on Vikunja 2.x (node-vikunja still called `/tasks/all`)
+
+### Platform
+
+- Pin nested deps (`@hono/node-server`, `fast-uri`, `brace-expansion`) so npm audit stays clean
+- Weekly Hono override watch: open an undo PR when the MCP SDK no longer needs the pin
+
 ## 0.3.0 — 2026-07-18
 
 Republish after npm package delete + GitHub release cleanup. First clean release with working CI publish token (bypass 2FA, empty IP allowlist).

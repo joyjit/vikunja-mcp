@@ -1,0 +1,118 @@
+name: Hono Override Watch
+
+# Weekly check: if @modelcontextprotocol/sdk no longer pulls a vulnerable
+# @hono/node-server (<2.0.5), open a PR to drop our temporary override.
+# Does not auto-merge. Tracking: https://github.com/joyjit/vikunja-mcp/issues/15
+
+on:
+  schedule:
+    # Mondays 07:00 UTC (after Security Scan / canary)
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+  BRANCH_NAME: chore/remove-hono-node-server-override
+  TRACKING_ISSUE: '15'
+
+jobs:
+  watch:
+    name: Check and open undo PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check whether override can be removed
+        id: check
+        run: |
+          set +e
+          node .github/scripts/check-hono-override.mjs
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 0 ]; then
+            echo "can_remove=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_remove=false" >> "$GITHUB_OUTPUT"
+          fi
+          # 0 = removable, 1 = still needed, 2 = already gone — all OK
+          if [ "$code" -eq 0 ] || [ "$code" -eq 1 ] || [ "$code" -eq 2 ]; then
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Skip when override still needed or already gone
+        if: steps.check.outputs.can_remove != 'true'
+        run: |
+          echo "No undo PR needed (exit_code=${{ steps.check.outputs.exit_code }})."
+
+      - name: Remove override and refresh lockfile
+        if: steps.check.outputs.can_remove == 'true'
+        run: |
+          node .github/scripts/check-hono-override.mjs --remove
+          npm install --package-lock-only
+
+      - name: Open or update undo PR
+        if: steps.check.outputs.can_remove == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Working tree clean after remove — nothing to push."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$BRANCH_NAME"
+          git add package.json package-lock.json
+          git commit -m "chore: remove @hono/node-server override" \
+            -m "MCP SDK no longer pulls a vulnerable @hono/node-server." \
+            -m "Closes #${TRACKING_ISSUE}"
+
+          git push -u origin "HEAD:$BRANCH_NAME" --force-with-lease
+
+          existing="$(gh pr list \
+            --head "$BRANCH_NAME" \
+            --state open \
+            --json number \
+            --jq '.[0].number')"
+
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open — updated branch."
+            exit 0
+          fi
+
+          gh pr create \
+            --title "chore: remove @hono/node-server override" \
+            --body "$(cat <<EOF
+          ## Summary
+          Automated check found that the locked \`@modelcontextprotocol/sdk\`
+          no longer depends on a vulnerable \`@hono/node-server\` (\`<2.0.5\`).
+
+          This PR removes the temporary \`overrides\` pin.
+
+          Closes #${TRACKING_ISSUE}
+
+          ## Notes
+          - Opened by the **Hono Override Watch** workflow (no auto-merge).
+          - Please confirm \`npm audit\` / Security Scan before merging.
+          EOF
+          )"

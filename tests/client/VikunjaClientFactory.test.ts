@@ -318,6 +318,36 @@ describe('VikunjaClientFactory', () => {
     });
   });
 
+  describe('Vikunja 2.x getAllTasks path fix', () => {
+    it('rewrites getAllTasks to use /tasks when request exists', async () => {
+      const request = jest.fn().mockResolvedValue([{ id: 7, title: 'Patched' }]);
+      mockVikunjaClientConstructor.mockImplementation(() => ({
+        tasks: {
+          getAllTasks: jest.fn().mockRejectedValue(new Error('should not call original')),
+          request,
+        },
+        projects: {},
+        users: {},
+        labels: {},
+        teams: {},
+        webhooks: {},
+      }));
+
+      mockAuthManager.getSession.mockReturnValue({
+        apiUrl: 'https://test.vikunja.com',
+        apiToken: 'test-token',
+      });
+
+      const client = factory.getClient();
+      const tasks = await client.tasks.getAllTasks({ per_page: 5 });
+
+      expect(request).toHaveBeenCalledWith('/tasks', 'GET', undefined, {
+        params: { per_page: 5 },
+      });
+      expect(tasks).toEqual([{ id: 7, title: 'Patched' }]);
+    });
+  });
+
   describe('Constructor and Initialization', () => {
     it('should initialize with required dependencies', () => {
       expect(() => new VikunjaClientFactory(mockAuthManager, mockVikunjaClientConstructor))

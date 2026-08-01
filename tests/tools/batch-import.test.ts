@@ -74,7 +74,13 @@ describe('Batch Import Tool', () => {
     mockClient = {
       tasks: {
         createTask: jest.fn(),
+        // Batch import applies labels via the individual endpoint (upstream #92).
+        // (`addLabelToTask`). Bulk updateTaskLabels({label_ids}) returned success with
+        // no effect on v2.4.0 — this file already had "labels not actually assigned"
+        // cases for that failure. Keep bulk on the mock
+        // en el mock porque algunos tests comprueban que ya NO se llama.
         updateTaskLabels: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
         bulkAssignUsersToTask: jest.fn(),
         getTask: jest.fn((id) =>
           Promise.resolve({
@@ -256,9 +262,8 @@ describe('Batch Import Tool', () => {
         project_id: 1,
       });
 
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(103, {
-        label_ids: [1, 2],
-      });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(103, { task_id: 103, label_id: 1 });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(103, { task_id: 103, label_id: 2 });
       expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(103, {
         user_ids: [10, 11],
       });
@@ -352,9 +357,8 @@ Task 2,Description 2,2,true`;
         project_id: 1,
       });
 
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(203, {
-        label_ids: [1, 2],
-      });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(203, { task_id: 203, label_id: 1 });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(203, { task_id: 203, label_id: 2 });
     });
 
     it('should handle CSV with all fields', async () => {
@@ -480,7 +484,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(new Error('Label error'));
+      mockClient.tasks.addLabelToTask.mockRejectedValue(new Error('Label error'));
 
       const result = await toolHandler({
         projectId: 1,
@@ -509,7 +513,7 @@ Description,1`;
       });
 
       // Labels are successfully assigned
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       // getTask returns the task with labels properly assigned
       mockClient.tasks.getTask.mockResolvedValue({
@@ -547,7 +551,7 @@ Description,1`;
       });
 
       // updateTaskLabels succeeds
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       // But getTask fails (can't verify)
       mockClient.tasks.getTask.mockRejectedValue(new Error('Failed to fetch task'));
@@ -562,7 +566,7 @@ Description,1`;
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain(
-        'Labels specified but not assigned (API token limitation)',
+        'Labels specified but not assigned',
       );
     });
 
@@ -578,7 +582,7 @@ Description,1`;
       });
 
       // updateTaskLabels throws auth error
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(
+      mockClient.tasks.addLabelToTask.mockRejectedValue(
         new Error(
           '401 Unauthorized: missing, malformed, expired or otherwise invalid token provided',
         ),
@@ -594,7 +598,9 @@ Description,1`;
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain('Label assignment requires JWT authentication');
-    });
+      // Label path is wrapped in withRetry (upstream #92).
+      // (AUTH_ERRORS): la cadena de reintentos no cabe en el tope de 5 s de Jest.
+    }, 20000);
 
     it('should skip unknown labels/users', async () => {
       const taskData = {
@@ -615,7 +621,7 @@ Description,1`;
       });
 
       // Should not call bulk assign with empty arrays
-      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       // Should have warnings about labels not found
@@ -700,7 +706,7 @@ Description,1`;
       });
 
       // But label assignment silently fails (doesn't throw error, just doesn't work)
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       // Add getTask mock to verify the labels weren't assigned
       mockClient.tasks.getTask = jest.fn().mockResolvedValue({
@@ -732,9 +738,8 @@ Description,1`;
       });
 
       // Verify updateTaskLabels was called with correct label IDs
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(122, {
-        label_ids: [1, 2],
-      });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(122, { task_id: 122, label_id: 1 });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(122, { task_id: 122, label_id: 2 });
 
       // Verify getTask was called to check if labels were actually assigned
       expect(mockClient.tasks.getTask).toHaveBeenCalledWith(122);
@@ -746,7 +751,7 @@ Description,1`;
       // NOW there should be a warning about label assignment failure
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain(
-        'Labels specified but not assigned (API token limitation)',
+        'Labels specified but not assigned',
       );
     });
 
@@ -1013,7 +1018,7 @@ Description,1`;
       });
       
       // Should not try to update labels or assignees when they are empty
-      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
     });
 
@@ -1029,7 +1034,7 @@ Description,1`;
       });
 
       // updateTaskLabels succeeds
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       // But getTask shows labels were not assigned (empty array instead of null)
       mockClient.tasks.getTask.mockResolvedValue({
@@ -1048,7 +1053,7 @@ Description,1`;
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain(
-        'Labels specified but not assigned (API token limitation)'
+        'Labels specified but not assigned'
       );
     });
 
@@ -1115,9 +1120,8 @@ Description,1`;
       });
 
       // Should map correctly despite case differences
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(1101, {
-        label_ids: [1, 2],
-      });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1101, { task_id: 1101, label_id: 1 });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1101, { task_id: 1101, label_id: 2 });
     });
 
     it('should handle assignees when projectUsers is empty but not due to auth failure', async () => {
@@ -1205,7 +1209,7 @@ Description,1`;
       });
 
       // updateTaskLabels succeeds
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       // getTask returns task without labels property
       mockClient.tasks.getTask.mockResolvedValue({
@@ -1223,7 +1227,7 @@ Description,1`;
       // Should show warning about labels not being assigned
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain(
-        'Labels specified but not assigned (API token limitation)'
+        'Labels specified but not assigned'
       );
     });
 
@@ -1283,7 +1287,7 @@ Description,1`;
 
       expect(mockClient.tasks.createTask).toHaveBeenCalledTimes(2);
       // Should not call updateTaskLabels for tasks with empty labels
-      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
     });
 
     it('should handle malformed labels response as defensive measure', async () => {
@@ -1351,7 +1355,7 @@ Description,1`;
       });
       
       // Mock successful label update
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       
       // Mock verification - labels successfully assigned
       mockClient.tasks.getTask.mockResolvedValue({
@@ -1367,9 +1371,7 @@ Description,1`;
       });
 
       // Should update with only the found label
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(1801, {
-        label_ids: [1],
-      });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1801, { task_id: 1801, label_id: 1 });
       
       // Task completed successfully, only 'bug' label was applied
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
@@ -1503,7 +1505,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue('Label update failed');
+      mockClient.tasks.addLabelToTask.mockRejectedValue('Label update failed');
 
       const result = await toolHandler({
         projectId: 1,
@@ -1527,7 +1529,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue({ code: 500, message: 'Server error' });
+      mockClient.tasks.addLabelToTask.mockRejectedValue({ code: 500, message: 'Server error' });
 
       const result = await toolHandler({
         projectId: 1,
@@ -1551,7 +1553,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockRejectedValue('Verification failed');
 
       const result = await toolHandler({
@@ -1581,7 +1583,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(new Error('Network timeout'));
+      mockClient.tasks.addLabelToTask.mockRejectedValue(new Error('Network timeout'));
 
       const result = await toolHandler({
         projectId: 1,
@@ -1686,7 +1688,7 @@ Description,1`;
       expect(result.content[0].text).toContain('Successfully imported: 3 tasks');
       
       // Should not try to update labels/assignees for first two tasks
-      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
     });
 
@@ -1740,7 +1742,7 @@ Description,1`;
       });
 
       // updateTaskLabels succeeds
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       // getTask returns only some labels (partial assignment)
       mockClient.tasks.getTask.mockResolvedValue({
@@ -1761,7 +1763,7 @@ Description,1`;
       // Should show warning about labels not fully assigned
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain(
-        'Labels specified but not assigned (API token limitation)'
+        'Labels specified but not assigned'
       );
     });
 
@@ -1884,7 +1886,7 @@ Description,1`;
 
       // Should complete but skip labels/assignees
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
-      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
     });
 
@@ -1922,7 +1924,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockRejectedValue(new Error('Verification error'));
 
       const result = await toolHandler({
@@ -1969,7 +1971,7 @@ Description,1`;
         title: 'Task with labels',
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(new Error('missing, malformed, expired or otherwise invalid token provided'));
+      mockClient.tasks.addLabelToTask.mockRejectedValue(new Error('missing, malformed, expired or otherwise invalid token provided'));
 
       const result = await toolHandler({
         projectId: 1,
@@ -1979,7 +1981,9 @@ Description,1`;
 
       expect(result.content[0].text).toContain('Warnings:');
       expect(result.content[0].text).toContain('Label assignment requires JWT authentication');
-    });
+      // Label path is wrapped in withRetry (upstream #92).
+      // (AUTH_ERRORS): la cadena de reintentos no cabe en el tope de 5 s de Jest.
+    }, 20000);
 
     it('should handle final error catch with MCPError instance', async () => {
       // Ensure MCPError is handled differently in final catch

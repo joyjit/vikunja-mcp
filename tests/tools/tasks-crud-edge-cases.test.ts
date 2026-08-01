@@ -41,7 +41,7 @@ describe('Tasks CRUD - Edge Cases and Defensive Programming', () => {
         updateTask: jest.fn(),
         deleteTask: jest.fn(),
         updateTaskLabels: jest.fn(),
-        addLabelToTask: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
         bulkAssignUsersToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
       },
@@ -508,7 +508,8 @@ describe('Tasks CRUD - Edge Cases and Defensive Programming', () => {
       const createdTask = { id: 1, title: 'Test Task', project_id: 1 };
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
       
-      // Mock label assignment failure
+      // Mock label assignment failure. Labels go through the individual endpoint now:
+      // the bulk one discards `label_ids` and clears the task's labels instead.
       const labelError = new Error('Label assignment failed');
       mockClient.tasks.addLabelToTask.mockRejectedValue(labelError);
       

@@ -91,6 +91,7 @@ describe('Tasks Tool - Repeating Tasks', () => {
         bulkAssignUsersToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
         updateTaskLabels: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
         createTaskComment: jest.fn(),
         getTaskComments: jest.fn(),
         bulkUpdateTasks: jest.fn(),

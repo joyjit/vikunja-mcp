@@ -5,13 +5,85 @@
 import type { MinimalTask } from '../../types';
 import { MCPError, ErrorCode } from '../../types';
 import { getClientFromContext } from '../../client';
+import type { VikunjaClient } from 'node-vikunja';
 import { isAuthenticationError } from '../../utils/auth-error-handler';
 import { withRetry, RETRY_CONFIG } from '../../utils/retry';
 import { validateId } from './validation';
 import { createSimpleResponse, formatAorpAsMarkdown } from '../../utils/response-factory';
 
 /**
+ * Applies labels to a task WITHOUT destroying the ones it already has.
+ *
+ * Two chained bugs made the previous path lose data. Both verified against a live
+ * Vikunja v2.4.0 instance:
+ *
+ *   1) UNUSABLE PAYLOAD. `node-vikunja`'s `updateTaskLabels` posts `{label_ids: [...]}`
+ *      to `/tasks/{id}/labels/bulk`, but the model Vikunja declares for that endpoint is
+ *      `{labels: [...]}` (see `LabelTaskBulk` in the server's OpenAPI). The unknown field
+ *      is discarded, the server reads an EMPTY label list, and dutifully applies it: it
+ *      removes every label and adds none — while answering `201`.
+ *
+ *   2) REPLACE SEMANTICS. Even with a working payload, the bulk endpoint replaces the
+ *      whole set, so any label not repeated in the call is dropped. A caller that only
+ *      wants to add one label has no way to know what else is on the task.
+ *
+ *   Reproduction: a task carrying labels 2 and 4, updated with `labels: [3]`, ended up
+ *   with NONE — the two it had were gone and the requested one was never applied, and the
+ *   operation reported success.
+ *
+ * The fix drops the bulk endpoint for the INDIVIDUAL one (`PUT /tasks/{id}/labels`, which
+ * returns 201 and actually applies), one call per label, over the UNION with what the task
+ * already had. There is precedent in this codebase: assignees moved to one-by-one calls
+ * for the same kind of reason (see AssigneeOperationsService).
+ *
+ * Resulting semantics: labels are ADDED, never removed. `remove-label` removes them.
+ * One deliberate consequence: `labels: []` no longer empties a task — it is a no-op. That
+ * used to be the way to clear all labels, but it was also the way to lose them by accident.
+ *
+ * @param currentLabelIds labels the task already carries. Read from the server if omitted.
+ *        Callers that have just CREATED the task pass `[]` and skip the read.
+ * @returns what was added and what was kept, so the caller can report it without guessing.
+ */
+export async function addLabelsToTaskAdditive(
+  client: VikunjaClient,
+  taskId: number,
+  labelIds: number[],
+  options: { currentLabelIds?: number[] } = {},
+): Promise<{ added: number[]; kept: number[] }> {
+  let kept = options.currentLabelIds;
+  if (kept === undefined) {
+    const currentTask = await client.tasks.getTask(taskId);
+    kept = (currentTask.labels ?? [])
+      .map((label) => label.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
+
+  // Only the missing ones are requested: re-applying one that is already there returns
+  // 400 ("label already exists on task") and would abort the rest of the batch for nothing.
+  const requested = [...new Set(labelIds)];
+  const toAdd = requested.filter((id) => !kept.includes(id));
+
+  for (const labelId of toAdd) {
+    await withRetry(
+      () =>
+        client.tasks.addLabelToTask(taskId, {
+          task_id: taskId,
+          label_id: labelId,
+        }),
+      {
+        ...RETRY_CONFIG.AUTH_ERRORS,
+        shouldRetry: (error: unknown) => isAuthenticationError(error),
+      },
+    );
+  }
+
+  return { added: toAdd, kept };
+}
+
+/**
  * Add labels to a task
+ *
+ * Semantics: ADD. Labels the task already had are preserved.
  */
 export async function applyLabels(args: {
   id?: number;
@@ -37,30 +109,25 @@ export async function applyLabels(args: {
     const taskId = args.id;
     const labelIds = args.labels;
 
-    // Add labels to the task with retry logic
-    for (const labelId of labelIds) {
-      try {
-        await withRetry(
-          () =>
-            client.tasks.addLabelToTask(taskId, {
-              task_id: taskId,
-              label_id: labelId,
-            }),
-          {
-            ...RETRY_CONFIG.AUTH_ERRORS,
-            shouldRetry: (error: unknown) => isAuthenticationError(error),
-          },
+    // Delegates to `addLabelsToTaskAdditive`, which reads the current labels and only
+    // requests the missing ones.
+    //
+    // This loop used to request all of them and throw on the first error. Vikunja returns
+    // 400 ("This label already exists on the task") when one is already applied, so
+    // `apply-label [2, 4]` on a task that already had 2 ABORTED, and 4 was never applied.
+    // Asking for something that is already true is not an error: it is a no-op.
+    try {
+      await addLabelsToTaskAdditive(client, taskId, labelIds, {
+      });
+    } catch (labelError) {
+      // Check if it's an auth error after retries
+      if (isAuthenticationError(labelError)) {
+        throw new MCPError(
+          ErrorCode.API_ERROR,
+          `Failed to apply label to task (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`,
         );
-      } catch (labelError) {
-        // Check if it's an auth error after retries
-        if (isAuthenticationError(labelError)) {
-          throw new MCPError(
-            ErrorCode.API_ERROR,
-            `Failed to apply label to task (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`,
-          );
-        }
-        throw labelError;
       }
+      throw labelError;
     }
 
     // Fetch the updated task to show current labels

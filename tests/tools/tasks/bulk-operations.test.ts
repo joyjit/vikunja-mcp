@@ -32,6 +32,7 @@ describe('Bulk operations', () => {
       bulkAssignUsersToTask: jest.fn(),
       removeUserFromTask: jest.fn(),
       updateTaskLabels: jest.fn(),
+      addLabelToTask: jest.fn().mockResolvedValue({}),
     },
   };
 
@@ -537,8 +538,11 @@ describe('Bulk operations', () => {
           }]
         });
 
-        expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(1, {
-          label_ids: [1],
+        // Labels go through the individual endpoint now: the bulk route discards
+        // `label_ids` and ends up clearing the task's labels instead of setting them.
+        expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1, {
+          task_id: 1,
+          label_id: 1,
         });
         expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(1, {
           user_ids: [1],
@@ -730,10 +734,12 @@ describe('Bulk operations', () => {
       await bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [] });
       expect(mockClient.tasks.removeUserFromTask).toHaveBeenCalledWith(1, 9);
 
-      mockClient.tasks.updateTaskLabels.mockResolvedValue(undefined);
+      // labels: [] is a no-op under additive semantics (does not clear).
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue({ id: 1, title: 'T', labels: [] });
       await bulkUpdateTasks({ taskIds: [1], field: 'labels', value: [] });
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalled();
+      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
     });
 
     it('handles missing assignees and create labels/assignees', async () => {
@@ -747,13 +753,14 @@ describe('Bulk operations', () => {
       expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
 
       mockClient.tasks.createTask.mockResolvedValue({ id: 10, title: 'N' });
-      mockClient.tasks.updateTaskLabels.mockResolvedValue(undefined);
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
       await bulkCreateTasks({
         projectId: 1,
         tasks: [{ title: 'N', labels: [1], assignees: [2] }],
       });
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalled();
+      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
     });
 

@@ -97,7 +97,12 @@ describe('Templates Tool', () => {
       tasks: {
         getProjectTasks: jest.fn(),
         createTask: jest.fn(),
+        // Templates apply labels via the individual endpoint (upstream #92).
+        // Keep updateTaskLabels (bulk) on the mock in case a test
+        // antiguo lo espera; el camino vivo es `addLabelToTask`.
         updateTaskLabels: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
+        getTask: jest.fn().mockResolvedValue({ id: 0, labels: [] }),
       },
     } as any;
 
@@ -1171,8 +1176,13 @@ describe('Templates Tool', () => {
         projectName: 'Test Project',
       });
 
-      // Should use 0 as fallback for null task ID
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(0, { label_ids: [1, 2] });
+      // Should use 0 as fallback for null task ID.
+      // Labels applied one-by-one via the individual endpoint, not bulk.
+      // via bulk updateTaskLabels({label_ids}), which on v2.4.0 returns success with
+      // no effect. Task is new so currentLabelIds: [] skips the read and there is
+      // GET previo: se piden las dos directamente.
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(0, { task_id: 0, label_id: 1 });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(0, { task_id: 0, label_id: 2 });
     });
 
     it('should handle variable names with regex special characters', async () => {

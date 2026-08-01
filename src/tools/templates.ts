@@ -13,6 +13,7 @@ import type { Project, Task } from 'node-vikunja';
 import { storageManager } from '../storage';
 import { logger } from '../utils/logger';
 import { formatAorpAsMarkdown } from '../utils/response-factory';
+import { addLabelsToTaskAdditive } from './tasks/labels';
 
 /**
  * Get session-scoped storage instance
@@ -378,11 +379,16 @@ export function registerTemplatesTool(server: McpServer, authManager: AuthManage
                   );
                   createdTasks.push(createdTask);
 
-                  // Add labels if any
+                  // Add labels if any.
+                  // Uses the INDIVIDUAL endpoint rather than the bulk one: Vikunja expects
+                  // `{labels: [...]}` there, so `{label_ids: [...]}` is discarded and the
+                  // server clears the task's labels while answering 201. The task was just
+                  // created, so there is nothing to preserve and `currentLabelIds: []`
+                  // skips the read.
                   if (taskTemplate.labels && taskTemplate.labels.length > 0) {
                     try {
-                      await client.tasks.updateTaskLabels(createdTask.id ?? 0, {
-                        label_ids: taskTemplate.labels,
+                      await addLabelsToTaskAdditive(client, createdTask.id ?? 0, taskTemplate.labels, {
+                        currentLabelIds: [],
                       });
                     } catch (labelError) {
                       logger.warn('Failed to add labels to task', {

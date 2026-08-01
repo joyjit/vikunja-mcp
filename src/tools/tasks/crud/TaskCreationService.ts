@@ -11,6 +11,7 @@ import { isAuthenticationError } from '../../../utils/auth-error-handler';
 import { withRetry, RETRY_CONFIG } from '../../../utils/retry';
 import { transformApiError, handleFetchError } from '../../../utils/error-handler';
 import { sanitizeString } from '../../../utils/validation';
+import { addLabelsToTaskAdditive } from '../labels';
 import { AUTH_ERROR_MESSAGES } from '../constants';
 import { validateDateString, validateId, convertRepeatConfiguration } from '../validation';
 import { createTaskResponse } from './TaskResponseFormatter';
@@ -210,22 +211,14 @@ export async function createTask(args: CreateTaskArgs): Promise<{ content: Array
 }
 
 /**
- * Adds labels to a task.
- * Uses addLabelToTask (same as apply-label) — updateTaskLabels can silently
- * no-op on some Vikunja versions (GitHub #37).
- *
- * Intentionally does not use withRetry: that helper shares an "anonymous"
- * circuit breaker across calls, so a later create would re-fire the first
- * call's label set against the wrong task.
+ * Adds labels to a task via addLabelsToTaskAdditive (individual endpoint).
+ * Avoids updateTaskLabels / {label_ids} which silently clears labels (upstream #92).
  */
 async function addLabelsToTask(client: VikunjaClient, taskId: number, labelIds: number[]): Promise<void> {
   try {
-    for (const labelId of labelIds) {
-      await client.tasks.addLabelToTask(taskId, {
-        task_id: taskId,
-        label_id: labelId,
-      });
-    }
+    // Shared helper: individual PUT /tasks/{id}/labels. currentLabelIds: [] skips read
+    // after create. withRetry is safe on this fork (breaker.fire(operation)).
+    await addLabelsToTaskAdditive(client, taskId, labelIds, { currentLabelIds: [] });
   } catch (labelError) {
     // Check if it's an auth error
     if (isAuthenticationError(labelError)) {

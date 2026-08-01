@@ -29,14 +29,18 @@ describe('Label operations', () => {
 
   describe('applyLabels', () => {
     it('should apply labels to a task successfully', async () => {
-      const mockTask = {
-        id: 1,
-        title: 'Test Task',
-        labels: [{ id: 1, title: 'research', hex_color: '3498db' }],
-      };
-
+      // applyLabels reads current labels first and only requests missing ones.
+      // missing ones, so the mock must return the BEFORE state (without the label)
+      // first, then the AFTER state. Returning the labeled task every time would mean
+      // "already present" and nothing would be added.
       mockClient.tasks.addLabelToTask.mockResolvedValue({});
-      mockClient.tasks.getTask.mockResolvedValue(mockTask);
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({ id: 1, title: 'Test Task', labels: [] })
+        .mockResolvedValue({
+          id: 1,
+          title: 'Test Task',
+          labels: [{ id: 1, title: 'research', hex_color: '3498db' }],
+        });
 
       const result = await applyLabels({ id: 1, labels: [1] });
 
@@ -46,6 +50,23 @@ describe('Label operations', () => {
       });
       expect(mockClient.tasks.getTask).toHaveBeenCalledWith(1);
       expect(result.content[0].text).toContain('Label applied to task successfully');
+    });
+
+    it('does not re-request a label the task already has', async () => {
+      // Previously requested blindly: Vikunja returns 400 "already exists" and the
+      // loop threw, so apply-label [2,4] with 2 already present never applied 4.
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
+      mockClient.tasks.getTask.mockResolvedValue({
+        id: 1,
+        title: 'Test Task',
+        labels: [{ id: 2, title: 'en-curso' }],
+      });
+
+      await expect(applyLabels({ id: 1, labels: [2, 4] })).resolves.toBeDefined();
+
+      // Only the missing label is requested.
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledTimes(1);
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1, { task_id: 1, label_id: 4 });
     });
 
     it('should throw error if task id is missing', async () => {

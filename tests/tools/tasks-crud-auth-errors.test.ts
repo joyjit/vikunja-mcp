@@ -35,6 +35,9 @@ jest.mock('../../src/utils/retry', () => {
         maxRetries: 3,
       },
     },
+    // Labels/assignees use their own circuitBreakerName when withRetry is used.
+    // sin estas constantes el mock parcial las dejaba en undefined y reventaba.
+    CIRCUIT_BREAKER_NAMES: actual.CIRCUIT_BREAKER_NAMES,
     // Preserve the real circuit breaker registry for test isolation
     circuitBreakerRegistry: actual.circuitBreakerRegistry,
   };
@@ -75,6 +78,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
         updateTask: jest.fn(),
         deleteTask: jest.fn(),
         updateTaskLabels: jest.fn(),
+        // Labels applied one-by-one via PUT /tasks/{id}/labels (upstream #92).
         addLabelToTask: jest.fn(),
         bulkAssignUsersToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
@@ -230,7 +234,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       
       // Mock label update failure with 401 auth error
       const authError = createAuthError(401, 'Unauthorized to update labels');
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(authError);
+      mockClient.tasks.addLabelToTask.mockRejectedValue(authError);
 
       await expect(
         updateTask({
@@ -260,7 +264,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       
       // Mock label update failure with 403 Axios-style auth error
       const authError = createAxiosAuthError(403, 'Forbidden to update labels');
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(authError);
+      mockClient.tasks.addLabelToTask.mockRejectedValue(authError);
 
       await expect(
         updateTask({
@@ -429,7 +433,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       
       // Mock label update failure with non-auth error
       const nonAuthError = new Error('Database connection failed');
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(nonAuthError);
+      mockClient.tasks.addLabelToTask.mockRejectedValue(nonAuthError);
 
       await expect(
         updateTask({

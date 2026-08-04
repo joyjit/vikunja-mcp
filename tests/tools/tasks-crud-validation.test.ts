@@ -39,6 +39,7 @@ describe('Tasks CRUD - Validation Coverage', () => {
         updateTask: jest.fn(),
         deleteTask: jest.fn(),
         updateTaskLabels: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
         bulkAssignUsersToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
       },

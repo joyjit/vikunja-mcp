@@ -27,7 +27,12 @@ describe('TaskCreationService', () => {
       tasks: {
         createTask: jest.fn(),
         getTask: jest.fn(),
+        // Labels applied via the individual endpoint (upstream #92).
+        // (`addLabelToTask`), no con el bulk `updateTaskLabels({label_ids})`, que contra
+        // v2.4.0 accepted bulk with no effect. Keep updateTaskLabels on the mock so
+        // tests can assert it is NOT called.
         updateTaskLabels: jest.fn(),
+        addLabelToTask: jest.fn(),
         bulkAssignUsersToTask: jest.fn(),
       },
     } as jest.Mocked<TypedVikunjaClient>;
@@ -79,7 +84,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue({
         ...createdTask,
         labels: [
@@ -230,7 +235,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue({
         ...createdTask,
         labels: [
@@ -250,9 +255,9 @@ describe('TaskCreationService', () => {
       // Assert
       expect(result.success).toBe(true);
       expect(result.warnings).toBeUndefined();
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(123, {
-        label_ids: [1, 2],
-      });
+      // One call per label via the individual endpoint.
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(123, { task_id: 123, label_id: 1 });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(123, { task_id: 123, label_id: 2 });
       expect(mockClient.tasks.getTask).toHaveBeenCalledWith(123);
     });
 
@@ -266,7 +271,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue({
         ...createdTask,
         labels: [], // No labels assigned despite successful API call
@@ -286,6 +291,9 @@ describe('TaskCreationService', () => {
       expect(result.warnings![0]).toContain('Labels specified but not assigned');
     });
 
+    // Label path uses the individual endpoint wrapped in withRetry (upstream #92)
+    // with RETRY_CONFIG.AUTH_ERRORS. Retries with delay can exceed Jest's 5s default,
+    // so this test needs its own timeout — that is the retry doing its job.
     it('should handle label assignment authentication error', async () => {
       // Arrange
       const createdTask: Task = {
@@ -298,7 +306,7 @@ describe('TaskCreationService', () => {
       (isAuthenticationError as jest.Mock).mockReturnValue(true);
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(labelError);
+      mockClient.tasks.addLabelToTask.mockRejectedValue(labelError);
 
       // Act
       const result = await taskCreationService.createTask(
@@ -312,7 +320,7 @@ describe('TaskCreationService', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings![0]).toContain('Label assignment requires JWT authentication');
-    });
+    }, 20000);
 
     it('should handle label assignment general error', async () => {
       // Arrange
@@ -326,7 +334,7 @@ describe('TaskCreationService', () => {
       (isAuthenticationError as jest.Mock).mockReturnValue(false);
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(labelError);
+      mockClient.tasks.addLabelToTask.mockRejectedValue(labelError);
 
       // Act
       const result = await taskCreationService.createTask(
@@ -356,7 +364,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue({
         ...createdTask,
         labels: [
@@ -389,7 +397,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockRejectedValue(new Error('Verification failed'));
 
       // Act
@@ -610,7 +618,7 @@ describe('TaskCreationService', () => {
       // Assert
       expect(result.success).toBe(true);
       expect(result.warnings).toBeUndefined();
-      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
     });
 
@@ -700,7 +708,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue({});
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue(createdTask); // Simulate label verification failure
       mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
 

@@ -89,6 +89,7 @@ describe('Tasks Tool - Reminders', () => {
         createTask: jest.fn(),
         deleteTask: jest.fn(),
         updateTaskLabels: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
         bulkAssignUsersToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
         createTaskComment: jest.fn(),

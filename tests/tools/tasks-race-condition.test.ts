@@ -76,7 +76,7 @@ describe('Tasks Tool - Race Condition Fix', () => {
         getProjectTasks: jest.fn(),
         createTask: jest.fn(),
         updateTaskLabels: jest.fn(),
-        addLabelToTask: jest.fn(),
+        addLabelToTask: jest.fn().mockResolvedValue({}),
         bulkAssignUsersToTask: jest.fn(),
         getTask: jest.fn(),
         deleteTask: jest.fn(),

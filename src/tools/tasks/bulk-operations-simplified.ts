@@ -6,6 +6,7 @@
 import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logger, isAuthenticationError, RETRY_CONFIG, transformApiError, handleFetchError } from '../../index';
 import type { Assignee } from '../../types';
 import { withRetry } from '../../utils/retry';
+import { addLabelsToTaskAdditive } from './labels';
 import { BatchProcessor } from '../../utils/performance/batch-processor';
 import type { Task } from 'node-vikunja';
 import { convertRepeatConfiguration, applyFieldUpdate } from './validation';
@@ -100,7 +101,9 @@ export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: 
         }
       }
       if (args.field === 'labels' && Array.isArray(args.value)) {
-        await withRetry(() => client.tasks.updateTaskLabels(taskId, { label_ids: args.value as number[] }), { ...RETRY_CONFIG.AUTH_ERRORS, shouldRetry: isAuthenticationError });
+        // Avoid bulk updateTaskLabels ({label_ids}): Vikunja expects {labels} and
+        // otherwise clears every label. Same additive semantics as single-task update.
+        await addLabelsToTaskAdditive(client, taskId, args.value as number[]);
       }
       return updated;
     });
@@ -194,7 +197,10 @@ export async function bulkCreateTasks(args: BulkCreateArgs): Promise<{ content: 
 
         try {
           const labels = t.labels;
-          if (labels && labels.length > 0) await withRetry(() => client.tasks.updateTaskLabels(createdId, { label_ids: labels }), { maxRetries: RETRY_CONFIG.AUTH_ERRORS.maxRetries ?? 3, timeout: (RETRY_CONFIG.AUTH_ERRORS.initialDelay ?? 1000) + (RETRY_CONFIG.AUTH_ERRORS.maxDelay ?? 10000), shouldRetry: isAuthenticationError });
+          // Task was just created — skip the read. Avoid broken bulk label_ids payload.
+          if (labels && labels.length > 0) {
+            await addLabelsToTaskAdditive(client, createdId, labels, { currentLabelIds: [] });
+          }
           const assignees = t.assignees;
           if (assignees && assignees.length > 0) {
             try {

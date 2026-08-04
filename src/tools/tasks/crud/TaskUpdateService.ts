@@ -9,6 +9,7 @@ import type { Task, VikunjaClient } from 'node-vikunja';
 import { validateDateString, validateId, convertRepeatConfiguration } from '../validation';
 import { isAuthenticationError } from '../../../utils/auth-error-handler';
 import { RETRY_CONFIG } from '../../../utils/retry';
+import { addLabelsToTaskAdditive } from '../labels';
 import { transformApiError, handleFetchError, handleStatusCodeError } from '../../../utils/error-handler';
 import { AUTH_ERROR_MESSAGES } from '../constants';
 import { createTaskResponse } from './TaskResponseFormatter';
@@ -69,9 +70,12 @@ export async function updateTask(args: UpdateTaskArgs): Promise<{ content: Array
     const updateData = buildUpdateData(updateState.currentTask, args);
     await client.tasks.updateTask(args.id, updateData);
 
-    // Update labels if provided
+    // Update labels if provided.
+    // The semantics are ADDITIVE. What was added and what was kept are reported back, so
+    // nobody reads `labels: [3]` in their own request and assumes the task now has only 3.
+    let labelOutcome: { added: number[]; kept: number[] } | undefined;
     if (args.labels !== undefined) {
-      await updateTaskLabels(client, args.id, args.labels);
+      labelOutcome = await updateTaskLabels(client, args.id, args.labels);
     }
 
     // Update assignees if provided
@@ -102,6 +106,13 @@ export async function updateTask(args: UpdateTaskArgs): Promise<{ content: Array
         affectedFields: updateState.affectedFields,
         previousState: updateState.previousState as Partial<Task>,
         taskId: args.id,
+        ...(labelOutcome && {
+          // labelsAdded already exists on TaskResponseMetadata as a boolean.
+          labelsAppliedIds: labelOutcome.added,
+          labelsKeptIds: labelOutcome.kept,
+          labelSemantics:
+            'additive: the labels sent are ADDED to the existing ones; use remove-label to remove any',
+        }),
       },
       undefined, // verbosity (ignored - using standard AORP)
       undefined, // useOptimizedFormat (ignored - using standard AORP)
@@ -213,13 +224,24 @@ function buildUpdateData(currentTask: Task, args: UpdateTaskArgs): Task {
 }
 
 /**
- * Updates task labels with authentication error handling
+ * Adds labels to a task (ADDITIVE) with authentication error handling.
+ *
+ * This function used to REPLACE the label set through the bulk endpoint. Against a live
+ * server that left tasks with NO labels at all: it removed the ones already there and did
+ * not apply the requested ones either, because Vikunja expects `{labels: [...]}` on that
+ * route and `node-vikunja` sends `{label_ids: [...]}`.
+ *
+ * It now delegates to `addLabelsToTaskAdditive`, which applies only what is missing, one
+ * individual call per label — the same non-destructive shape `updateTaskAssignees` right
+ * below already uses.
  */
-async function updateTaskLabels(client: VikunjaClient, taskId: number, labelIds: number[]): Promise<void> {
+async function updateTaskLabels(
+  client: VikunjaClient,
+  taskId: number,
+  labelIds: number[],
+): Promise<{ added: number[]; kept: number[] }> {
   try {
-    await client.tasks.updateTaskLabels(taskId, {
-      label_ids: labelIds,
-    });
+    return await addLabelsToTaskAdditive(client, taskId, labelIds);
   } catch (labelError) {
     // Check if it's an auth error
     if (isAuthenticationError(labelError)) {

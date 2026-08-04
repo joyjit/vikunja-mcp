@@ -2,6 +2,7 @@ import { logger } from '../utils/logger';
 import type { TaskCreationData } from '../types';
 import { MCPError, ErrorCode } from '../types';
 import { isAuthenticationError } from '../utils/auth-error-handler';
+import { addLabelsToTaskAdditive } from '../tools/tasks/labels';
 import type { Task, Label, User } from 'node-vikunja';
 import type { TypedVikunjaClient } from '../types/node-vikunja-extended';
 import type { ImportedTask } from '../parsers/InputParserFactory';
@@ -266,10 +267,19 @@ export class TaskCreationService {
 
     if (labelIds.length > 0 && createdTask.id) {
       try {
-        // Try to update labels
-        const updateResult = await client.tasks.updateTaskLabels(createdTask.id, {
-          label_ids: labelIds,
-        });
+        // Uses the INDIVIDUAL endpoint rather than the bulk one. The warning below
+        // ("API token limitation") actually described a BULK failure, not a token
+        // limitation: Vikunja expects `{labels: [...]}` on that route, so `{label_ids: […]}`
+        // is discarded and the server applies an empty list while answering 201. With the
+        // individual `PUT /tasks/{id}/labels` (201) labels apply fine with an API token.
+        // The verification below is kept: checking beats assuming.
+        // The task was just created, so `currentLabelIds: []` avoids an extra read.
+        const updateResult = await addLabelsToTaskAdditive(
+          client as unknown as Parameters<typeof addLabelsToTaskAdditive>[0],
+          createdTask.id,
+          labelIds,
+          { currentLabelIds: [] },
+        );
 
         // Verify the labels were actually assigned (API tokens may silently fail)
         const labelsActuallyAssigned = await this.verifyLabelAssignment(client, createdTask.id, labelIds);
@@ -282,7 +292,7 @@ export class TaskCreationService {
             labelNames: task.labels,
             updateResult,
           });
-          warnings.push(`Labels specified but not assigned (API token limitation). Consider using JWT authentication for label support.`);
+          warnings.push(`Labels specified but not assigned. Verify the API token has the nested 'tasks_labels' permission.`);
         } else {
           logger.debug('Labels assigned and verified successfully', {
             taskId: createdTask.id,

@@ -130,6 +130,7 @@ describe('Tasks Tool', () => {
         getTaskComments: jest.fn(),
         createTaskComment: jest.fn(),
         updateTaskLabels: jest.fn(),
+        // Labels applied one-by-one via PUT /tasks/{id}/labels (upstream #92).
         addLabelToTask: jest.fn(),
         removeLabelFromTask: jest.fn(),
         bulkAssignUsersToTask: jest.fn(),
@@ -390,6 +391,7 @@ describe('Tasks Tool', () => {
       };
 
       mockClient.tasks.createTask.mockResolvedValue({ ...mockTask, id: 1 });
+      // Create applies labels via addLabelToTask; final get must show them attached.
       mockClient.tasks.getTask.mockResolvedValue({
         ...mockTask,
         ...fullTask,
@@ -968,17 +970,23 @@ describe('Tasks Tool', () => {
 
       mockClient.tasks.getTask
         .mockResolvedValueOnce(mockTask)
-        .mockResolvedValueOnce(taskWithLabels);
+        // Current-label read + final fetch return the task with label 1 already set,
+        // so only label 2 should be requested (additive semantics).
+        .mockResolvedValue(taskWithLabels);
       mockClient.tasks.updateTask.mockResolvedValue(taskWithLabels);
+      mockClient.tasks.addLabelToTask.mockResolvedValue({});
 
       await callTool('update', {
         id: 1,
         labels: [1, 2],
       });
 
-      // Labels are updated via updateTaskLabels
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(1, {
-        label_ids: [1, 2],
+      // One individual call per missing label; never the broken bulk endpoint (#92).
+      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledTimes(1);
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1, {
+        task_id: 1,
+        label_id: 2,
       });
     });
 
@@ -1978,6 +1986,7 @@ describe('Tasks Tool', () => {
       const aorpStatus = parsed.getAorpStatus();
       expect(aorpStatus.type).toBe('success');
       expect(markdown).toContain('Successfully updated 2 tasks');
+      // Fork always uses per-task merge (never native bulkUpdateTasks).
       expect(mockClient.tasks.bulkUpdateTasks).not.toHaveBeenCalled();
       expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
     });
@@ -1998,6 +2007,7 @@ describe('Tasks Tool', () => {
       expect(markdown).toContain('Successfully updated 2 tasks');
       expect(mockClient.tasks.bulkUpdateTasks).not.toHaveBeenCalled();
       expect(mockClient.tasks.updateTask).toHaveBeenCalledTimes(2);
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalled();
     });
 
     it('should handle bulk update for due_date field', async () => {
@@ -2081,6 +2091,45 @@ describe('Tasks Tool', () => {
         1,
         expect.objectContaining({ repeat_after: 86400 }),
       );
+    });
+
+    it('should handle non-auth errors in assignee updates during bulk-update', async () => {
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({ ...mockTask, id: 1, assignees: [] })
+        .mockResolvedValueOnce({ ...mockTask, id: 1, assignees: [] });
+      mockClient.tasks.updateTask.mockResolvedValue({ ...mockTask, id: 1 });
+      mockClient.tasks.bulkAssignUsersToTask.mockRejectedValue(new Error('Invalid user ID'));
+
+      await expect(
+        callTool('bulk-update', { taskIds: [1], field: 'assignees', value: [999] }),
+      ).rejects.toThrow(/Could not update any tasks/);
+
+      expect(mockClient.tasks.bulkUpdateTasks).not.toHaveBeenCalled();
+    });
+
+    it('should handle assignee removal failures during bulk update', async () => {
+      const taskWithAssignees = {
+        ...mockTask,
+        id: 1,
+        assignees: [{ id: 1, username: 'user1' }],
+      };
+
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce(taskWithAssignees)
+        .mockResolvedValueOnce(taskWithAssignees);
+
+      mockClient.tasks.updateTask.mockResolvedValue(taskWithAssignees);
+      mockClient.tasks.removeUserFromTask.mockRejectedValue(new Error('Failed to remove user'));
+
+      await expect(
+        callTool('bulk-update', {
+          taskIds: [1],
+          field: 'assignees',
+          value: [],
+        }),
+      ).rejects.toThrow('Bulk update failed. Could not update any tasks');
+
+      expect(mockClient.tasks.removeUserFromTask).toHaveBeenCalledWith(1, 1);
     });
 
     it('should handle generic errors in bulk update', async () => {
@@ -2381,8 +2430,15 @@ describe('Tasks Tool', () => {
 
       const result = await callTool('bulk-create', { projectId: 1, tasks });
 
-      expect(mockClient.tasks.updateTaskLabels).toHaveBeenCalledWith(1, {
-        label_ids: [1, 2],
+      expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledTimes(2);
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1, {
+        task_id: 1,
+        label_id: 1,
+      });
+      expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(1, {
+        task_id: 1,
+        label_id: 2,
       });
       expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(1, {
         user_ids: [3, 4],
@@ -2402,7 +2458,7 @@ describe('Tasks Tool', () => {
         project_id: 1,
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(new Error('Label update failed'));
+      mockClient.tasks.addLabelToTask.mockRejectedValue(new Error('Label update failed'));
       mockClient.tasks.deleteTask.mockResolvedValue(undefined);
 
       await expect(
@@ -2435,7 +2491,7 @@ describe('Tasks Tool', () => {
         project_id: 1,
       });
 
-      mockClient.tasks.updateTaskLabels.mockRejectedValue(new Error('Label update failed'));
+      mockClient.tasks.addLabelToTask.mockRejectedValue(new Error('Label update failed'));
       mockClient.tasks.deleteTask.mockRejectedValue(new Error('Delete failed'));
 
       await expect(

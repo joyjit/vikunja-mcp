@@ -39,6 +39,8 @@ describe('Tasks CRUD - Final Coverage', () => {
         updateTask: jest.fn(),
         deleteTask: jest.fn(),
         updateTaskLabels: jest.fn(),
+        // Labels applied via PUT /tasks/{id}/labels, one at a time.
+        addLabelToTask: jest.fn(),
         bulkAssignUsersToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
       },
@@ -281,9 +283,11 @@ describe('Tasks CRUD - Final Coverage', () => {
 
       mockClient.tasks.getTask
         .mockResolvedValueOnce(mockTask) // Initial fetch
-        .mockResolvedValueOnce(updatedTask); // Final fetch
+        // Remaining reads (current labels, current assignees, final fetch)
+        // return the already-updated task.
+        .mockResolvedValue(updatedTask);
       mockClient.tasks.updateTask.mockResolvedValue(updatedTask);
-      mockClient.tasks.updateTaskLabels.mockResolvedValue(undefined);
+      mockClient.tasks.addLabelToTask.mockResolvedValue(undefined);
       mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
 
       const result = await updateTask({

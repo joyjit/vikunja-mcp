@@ -26,6 +26,19 @@ export function validateDateString(date: string, fieldName: string): void {
 export const validateId = validateSharedId;
 
 /**
+ * Validates completion percentage for Vikunja `percent_done` (0–100).
+ */
+export function validatePercentDone(percentDone: number): void {
+  if (typeof percentDone !== 'number' || Number.isNaN(percentDone) ||
+      percentDone < 0 || percentDone > 100) {
+    throw new MCPError(
+      ErrorCode.VALIDATION_ERROR,
+      'percentDone must be a number between 0 and 100',
+    );
+  }
+}
+
+/**
  * Convert repeat configuration from user-friendly format to Vikunja API format
  *
  * Vikunja API expects:
@@ -107,6 +120,9 @@ export function applyFieldUpdate(task: Task, field: string | undefined, value: u
       break;
     case 'priority':
       task.priority = value as number;
+      break;
+    case 'percent_done':
+      task.percent_done = value as number;
       break;
     case 'due_date':
       task.due_date = value as string;

@@ -13,7 +13,7 @@ import { transformApiError, handleFetchError } from '../../../utils/error-handle
 import { sanitizeString } from '../../../utils/validation';
 import { addLabelsToTaskAdditive } from '../labels';
 import { AUTH_ERROR_MESSAGES } from '../constants';
-import { validateDateString, validateId, convertRepeatConfiguration } from '../validation';
+import { validateDateString, validateId, convertRepeatConfiguration, validatePercentDone } from '../validation';
 import { createTaskResponse } from './TaskResponseFormatter';
 import { formatAorpAsMarkdown } from '../../../utils/response-factory';
 
@@ -23,6 +23,8 @@ export interface CreateTaskArgs {
   description?: string;
   dueDate?: string;
   priority?: number;
+  /** Completion percentage (0–100), mapped to Vikunja `percent_done`. */
+  percentDone?: number;
   labels?: number[];
   assignees?: number[];
   repeatAfter?: number;
@@ -65,6 +67,10 @@ export async function createTask(args: CreateTaskArgs): Promise<{ content: Array
       validateDateString(args.dueDate, 'dueDate');
     }
 
+    if (args.percentDone !== undefined) {
+      validatePercentDone(args.percentDone);
+    }
+
     // Validate assignee IDs upfront
     if (args.assignees && args.assignees.length > 0) {
       args.assignees.forEach((id) => validateId(id, 'assignee ID'));
@@ -87,6 +93,7 @@ export async function createTask(args: CreateTaskArgs): Promise<{ content: Array
     if (sanitizedDescription !== undefined) newTask.description = sanitizedDescription;
     if (args.dueDate !== undefined) newTask.due_date = args.dueDate;
     if (args.priority !== undefined) newTask.priority = args.priority;
+    if (args.percentDone !== undefined) newTask.percent_done = args.percentDone;
 
     // Handle repeat configuration
     if (args.repeatAfter !== undefined || args.repeatMode !== undefined) {

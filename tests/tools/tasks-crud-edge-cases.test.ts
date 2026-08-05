@@ -284,6 +284,49 @@ describe('Tasks CRUD - Edge Cases and Defensive Programming', () => {
       expect(aorpStatus.type).toBe('success');
     });
 
+    it('should update percentDone on a task', async () => {
+      const currentTask = {
+        ...mockTask,
+        percent_done: 0,
+      };
+      const updatedTask = {
+        ...currentTask,
+        percent_done: 75,
+      };
+
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce(currentTask)
+        .mockResolvedValueOnce(updatedTask);
+      mockClient.tasks.updateTask.mockResolvedValue(updatedTask);
+
+      const result = await updateTask({
+        id: 1,
+        percentDone: 75,
+      });
+
+      expect(mockClient.tasks.updateTask).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          percent_done: 75,
+        }),
+      );
+
+      const markdown = result.content[0].text;
+      const parsed = parseMarkdown(markdown);
+      expect(parsed.getAorpStatus().type).toBe('success');
+      expect(markdown).toContain('Task updated successfully');
+    });
+
+    it('should reject percentDone outside 0–100', async () => {
+      await expect(updateTask({ id: 1, percentDone: 101 })).rejects.toThrow(
+        'percentDone must be a number between 0 and 100',
+      );
+      await expect(updateTask({ id: 1, percentDone: -1 })).rejects.toThrow(
+        'percentDone must be a number between 0 and 100',
+      );
+      expect(mockClient.tasks.updateTask).not.toHaveBeenCalled();
+    });
+
     it('should handle empty assignee list updates', async () => {
       const taskWithAssignees = {
         ...mockTask,

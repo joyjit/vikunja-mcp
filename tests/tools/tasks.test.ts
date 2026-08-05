@@ -1728,7 +1728,7 @@ describe('Tasks Tool', () => {
           value: 'test',
         }),
       ).rejects.toThrow(
-        'Invalid field: invalid_field. Allowed fields: done, priority, due_date, project_id, assignees, labels',
+        'Invalid field: invalid_field. Allowed fields: done, priority, due_date, project_id, assignees, labels, repeat_after, repeat_mode, percent_done',
       );
     });
 

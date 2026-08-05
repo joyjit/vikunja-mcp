@@ -2,7 +2,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 import {
   validateDateString,
   validateId,
+  validatePercentDone,
   convertRepeatConfiguration,
+  applyFieldUpdate,
   processBatches,
 } from '../../../src/tools/tasks/validation';
 import { MCPError, ErrorCode } from '../../../src/types';
@@ -57,6 +59,34 @@ describe('Validation utilities', () => {
       expect(() => validateId(1.5, 'testId')).toThrow(
         new MCPError(ErrorCode.VALIDATION_ERROR, 'testId must be a positive integer')
       );
+    });
+  });
+
+  describe('validatePercentDone', () => {
+    it('should accept values from 0 to 100', () => {
+      expect(() => validatePercentDone(0)).not.toThrow();
+      expect(() => validatePercentDone(50)).not.toThrow();
+      expect(() => validatePercentDone(100)).not.toThrow();
+    });
+
+    it('should reject values outside 0–100', () => {
+      expect(() => validatePercentDone(-1)).toThrow(
+        new MCPError(ErrorCode.VALIDATION_ERROR, 'percentDone must be a number between 0 and 100'),
+      );
+      expect(() => validatePercentDone(101)).toThrow(
+        new MCPError(ErrorCode.VALIDATION_ERROR, 'percentDone must be a number between 0 and 100'),
+      );
+      expect(() => validatePercentDone(Number.NaN)).toThrow(
+        new MCPError(ErrorCode.VALIDATION_ERROR, 'percentDone must be a number between 0 and 100'),
+      );
+    });
+  });
+
+  describe('applyFieldUpdate', () => {
+    it('should set percent_done on the task', () => {
+      const task = { title: 't', percent_done: 0 } as Parameters<typeof applyFieldUpdate>[0];
+      applyFieldUpdate(task, 'percent_done', 42);
+      expect(task.percent_done).toBe(42);
     });
   });
 

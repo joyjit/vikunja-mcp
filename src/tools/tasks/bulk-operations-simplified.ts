@@ -205,6 +205,7 @@ export async function bulkCreateTasks(args: BulkCreateArgs): Promise<{ content: 
         if (t.description !== undefined) newTask.description = t.description;
         if (t.dueDate !== undefined) newTask.due_date = t.dueDate;
         if (t.priority !== undefined) newTask.priority = t.priority;
+        if (t.percentDone !== undefined) newTask.percent_done = t.percentDone;
         if (t.repeatAfter !== undefined || t.repeatMode !== undefined) {
           const rc = convertRepeatConfiguration(t.repeatAfter, t.repeatMode);
           if (rc.repeat_after !== undefined) newTask.repeat_after = rc.repeat_after;

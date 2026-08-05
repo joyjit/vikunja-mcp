@@ -21,6 +21,7 @@ export interface BulkCreateTaskData {
   description?: string;
   dueDate?: string;
   priority?: number;
+  percentDone?: number;
   labels?: number[];
   assignees?: number[];
   repeatAfter?: number;
@@ -100,6 +101,7 @@ export const bulkOperationValidator = {
       'labels',
       'repeat_after',
       'repeat_mode',
+      'percent_done',
     ];
 
     if (!args.field || !allowedFields.includes(args.field)) {
@@ -113,6 +115,15 @@ export const bulkOperationValidator = {
     if (args.field === 'priority' && typeof args.value === 'number') {
       if (args.value < 0 || args.value > 5) {
         throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Priority must be between 0 and 5');
+      }
+    }
+
+    if (args.field === 'percent_done' && typeof args.value === 'number') {
+      if (args.value < 0 || args.value > 100) {
+        throw new MCPError(
+          ErrorCode.VALIDATION_ERROR,
+          'percent_done must be a number between 0 and 100',
+        );
       }
     }
 

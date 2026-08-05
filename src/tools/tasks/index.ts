@@ -153,6 +153,8 @@ export function registerTasksTool(
       projectId: z.number().optional(),
       dueDate: z.string().optional(),
       priority: z.number().min(0).max(5).optional(),
+      /** Completion percentage 0–100 (Vikunja percent_done) */
+      percentDone: z.number().min(0).max(100).optional(),
       labels: z.array(z.number()).optional(),
       assignees: z.array(z.number()).optional(),
       // Recurring task fields
@@ -183,6 +185,7 @@ export function registerTasksTool(
             description: z.string().optional(),
             dueDate: z.string().optional(),
             priority: z.number().min(0).max(5).optional(),
+            percentDone: z.number().min(0).max(100).optional(),
             labels: z.array(z.number()).optional(),
             assignees: z.array(z.number()).optional(),
             repeatAfter: z.number().min(0).optional(),

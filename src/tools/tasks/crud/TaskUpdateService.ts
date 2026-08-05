@@ -6,7 +6,7 @@
 import { MCPError, ErrorCode } from '../../../types';
 import { getClientFromContext } from '../../../client';
 import type { Task, VikunjaClient } from 'node-vikunja';
-import { validateDateString, validateId, convertRepeatConfiguration } from '../validation';
+import { validateDateString, validateId, convertRepeatConfiguration, validatePercentDone } from '../validation';
 import { isAuthenticationError } from '../../../utils/auth-error-handler';
 import { RETRY_CONFIG } from '../../../utils/retry';
 import { addLabelsToTaskAdditive } from '../labels';
@@ -22,6 +22,8 @@ export interface UpdateTaskArgs {
   dueDate?: string;
   priority?: number;
   done?: boolean;
+  /** Completion percentage (0–100), mapped to Vikunja `percent_done`. */
+  percentDone?: number;
   /** Move the task to another project (merged into full-model update). */
   projectId?: number;
   labels?: number[];
@@ -59,6 +61,10 @@ export async function updateTask(args: UpdateTaskArgs): Promise<{ content: Array
     // Validate project move target if provided
     if (args.projectId !== undefined) {
       validateId(args.projectId, 'projectId');
+    }
+
+    if (args.percentDone !== undefined) {
+      validatePercentDone(args.percentDone);
     }
 
     const client = await getClientFromContext();
@@ -164,6 +170,7 @@ async function analyzeUpdateState(client: VikunjaClient, taskId: number, args: U
   if (currentTask.due_date !== undefined) previousState.due_date = currentTask.due_date;
   if (currentTask.priority !== undefined) previousState.priority = currentTask.priority;
   if (currentTask.done !== undefined) previousState.done = currentTask.done;
+  if (currentTask.percent_done !== undefined) previousState.percent_done = currentTask.percent_done;
   if (currentTask.project_id !== undefined) previousState.project_id = currentTask.project_id;
   if (currentTask.repeat_after !== undefined) previousState.repeat_after = currentTask.repeat_after;
   if (currentTask.repeat_mode !== undefined) previousState.repeat_mode = currentTask.repeat_mode;
@@ -176,6 +183,9 @@ async function analyzeUpdateState(client: VikunjaClient, taskId: number, args: U
   if (args.dueDate !== undefined && args.dueDate !== currentTask.due_date) affectedFields.push('dueDate');
   if (args.priority !== undefined && args.priority !== currentTask.priority) affectedFields.push('priority');
   if (args.done !== undefined && args.done !== currentTask.done) affectedFields.push('done');
+  if (args.percentDone !== undefined && args.percentDone !== currentTask.percent_done) {
+    affectedFields.push('percentDone');
+  }
   if (args.projectId !== undefined && args.projectId !== currentTask.project_id) affectedFields.push('projectId');
   if (args.repeatAfter !== undefined && args.repeatAfter !== currentTask.repeat_after) affectedFields.push('repeatAfter');
   if (args.repeatMode !== undefined && args.repeatMode !== currentTask.repeat_mode) affectedFields.push('repeatMode');
@@ -202,6 +212,7 @@ function buildUpdateData(currentTask: Task, args: UpdateTaskArgs): Task {
     ...(args.dueDate !== undefined && { due_date: args.dueDate }),
     ...(args.priority !== undefined && { priority: args.priority }),
     ...(args.done !== undefined && { done: args.done }),
+    ...(args.percentDone !== undefined && { percent_done: args.percentDone }),
     // Move between projects — must be part of the full-model payload or Vikunja ignores it
     ...(args.projectId !== undefined && { project_id: args.projectId }),
     // Handle repeat configuration for updates

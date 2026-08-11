@@ -94,7 +94,7 @@ All improvements maintain **100% backward compatibility** with existing implemen
 
 Requires **Node.js 24+**. Use an API token (`tk_…`) or JWT from your Vikunja instance.
 
-Pin a version if you want (example): `"args": ["-y", "@joyjit/vikunja-mcp@0.3.1"]`.
+Pin a version if you want (example): `"args": ["-y", "@joyjit/vikunja-mcp@0.3.2"]`.
 
 ### Option 2: Install from GitHub (no npm needed)
 

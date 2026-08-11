@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { bulkUpdateTasks, bulkDeleteTasks, bulkCreateTasks } from '../../../src/tools/tasks/bulk-operations';
+import { bulkUpdateTasks, bulkDeleteTasks, bulkCreateTasks, resolveBulkWriteConcurrency } from '../../../src/tools/tasks/bulk-operations';
 import { getClientFromContext } from '../../../src/client';
 import { MCPError, ErrorCode } from '../../../src/types';
 import { isAuthenticationError } from '../../../src/utils/auth-error-handler';
@@ -16,6 +16,35 @@ jest.mock('../../../src/utils/retry');
 jest.mock('../../../src/utils/logger');
 
 describe('Bulk operations', () => {
+  it('resolveBulkWriteConcurrency defaults and clamps env overrides', () => {
+    const previous = process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+    try {
+      delete process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+      expect(resolveBulkWriteConcurrency(1)).toBe(1);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '';
+      expect(resolveBulkWriteConcurrency(2)).toBe(2);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = 'nope';
+      expect(resolveBulkWriteConcurrency(1)).toBe(1);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '0';
+      expect(resolveBulkWriteConcurrency(1)).toBe(1);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '3';
+      expect(resolveBulkWriteConcurrency(1)).toBe(3);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '99';
+      expect(resolveBulkWriteConcurrency(1)).toBe(8);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+      } else {
+        process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = previous;
+      }
+    }
+  });
+
   const mockClient = {
     tasks: {
       bulkUpdateTasks: jest.fn(),
@@ -249,6 +278,25 @@ describe('Bulk operations', () => {
         expect(markdown).toContain("## ✅ Success");
       });
 
+      it('should report partial failure instead of fake full success (issue #79)', async () => {
+        mockClient.tasks.bulkUpdateTasks.mockRejectedValue(new Error('Bulk API failed'));
+        mockClient.tasks.getTask
+          .mockResolvedValueOnce({ id: 1, title: 'ok', project_id: 1, done: false })
+          .mockResolvedValueOnce({ id: 2, title: 'fail', project_id: 1, done: false });
+        mockClient.tasks.updateTask
+          .mockResolvedValueOnce({ id: 1, title: 'ok', project_id: 1, done: true })
+          .mockRejectedValueOnce(new Error('Internal Server Error'));
+
+        const result = await bulkUpdateTasks({ taskIds: [1, 2], field: 'done', value: true });
+        const markdown = result.content[0].text;
+        const parsed = parseMarkdown(markdown);
+
+        expect(parsed.hasHeading(2, /Error/)).toBe(true);
+        expect(markdown).toContain('Bulk update partially completed');
+        expect(markdown).toContain('Successfully updated 1 tasks, 1 failed');
+        expect(markdown).toContain('**FailedCount**:');
+      });
+
       it('should handle assignees field in fallback mode', async () => {
         const bulkError = new Error('Bulk API failed');
         const mockTask = { id: 1, title: 'Task 1', assignees: [] };
@@ -279,7 +327,14 @@ describe('Bulk operations', () => {
         mockClient.tasks.bulkUpdateTasks.mockRejectedValue(bulkError);
         mockClient.tasks.getTask.mockResolvedValue({ id: 1, title: 'Task 1', assignees: [] });
         mockClient.tasks.updateTask.mockResolvedValue({ id: 1, title: 'Task 1' });
-        (withRetry as jest.Mock).mockRejectedValue(authError);
+        let retryCalls = 0;
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => {
+          retryCalls += 1;
+          if (retryCalls === 1) {
+            return fn();
+          }
+          return Promise.reject(authError);
+        });
         (isAuthenticationError as jest.Mock).mockReturnValue(true);
 
         await expect(bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [1] })).rejects.toThrow(
@@ -540,7 +595,14 @@ describe('Bulk operations', () => {
         const authError = new Error('Authentication failed');
         
         mockClient.tasks.createTask.mockResolvedValue(mockTask);
-        (withRetry as jest.Mock).mockRejectedValue(authError);
+        let retryCalls = 0;
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => {
+          retryCalls += 1;
+          if (retryCalls === 1) {
+            return fn();
+          }
+          return Promise.reject(authError);
+        });
         (isAuthenticationError as jest.Mock).mockReturnValue(true);
         mockClient.tasks.deleteTask.mockResolvedValue({});
 
@@ -635,7 +697,14 @@ describe('Bulk operations', () => {
         const deleteError = new Error('Cleanup failed');
         
         mockClient.tasks.createTask.mockResolvedValue(mockTask);
-        (withRetry as jest.Mock).mockRejectedValue(labelError);
+        let retryCalls = 0;
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => {
+          retryCalls += 1;
+          if (retryCalls === 1) {
+            return fn();
+          }
+          return Promise.reject(labelError);
+        });
         mockClient.tasks.deleteTask.mockRejectedValue(deleteError);
 
         await expect(bulkCreateTasks({ 

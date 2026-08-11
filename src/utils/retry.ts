@@ -69,10 +69,16 @@ export interface RetryOptions {
   initialDelay?: number;
   backoffFactor?: number;
   maxDelay?: number;
+  /** When false, run the operation directly without a circuit breaker. Default true. */
+  enableCircuitBreaker?: boolean;
+  /** Named circuit breaker key. Defaults to a unique per-call name. */
+  circuitBreakerName?: string;
 }
 
 // Production-ready defaults
-const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'shouldRetry'>> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<RetryOptions, 'shouldRetry' | 'enableCircuitBreaker' | 'circuitBreakerName'>
+> = {
   maxRetries: 3,
   timeout: 30000,
   resetTimeout: 30000,
@@ -124,13 +130,22 @@ export async function withRetry<T>(
   options: RetryOptions = {}
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  const enableCircuitBreaker = options.enableCircuitBreaker !== false;
   let lastError: unknown;
   let delay = opts.initialDelay || 1000;
+  const maxRetries = opts.maxRetries ?? 3;
 
-  for (let attempt = 0; attempt <= (opts.maxRetries || 3); attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Use circuit breaker for the operation
-      const breaker = createCircuitBreaker(operation, 'anonymous', opts);
+      if (!enableCircuitBreaker) {
+        return await operation();
+      }
+      // Unique name per call unless the caller shares a family via circuitBreakerName.
+      // A hard-coded 'anonymous' breaker stays bound to the first operation it wrapped (#80).
+      const breakerName =
+        options.circuitBreakerName ||
+        `anonymous-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const breaker = createCircuitBreaker(operation, breakerName, opts);
       return await breaker.fire() as Promise<T>;
     } catch (error) {
       lastError = error;
@@ -141,12 +156,12 @@ export async function withRetry<T>(
         : isRetryableError(error as Error);
 
       // If this is the last attempt or error is not retryable, throw
-      if (attempt === (opts.maxRetries || 3) || !shouldRetry) {
+      if (attempt === maxRetries || !shouldRetry) {
         throw error;
       }
 
       // Log retry attempt
-      logger.debug(`Retry attempt ${attempt + 1}/${opts.maxRetries || 3} after ${delay}ms`);
+      logger.debug(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
 
       // Wait before retrying with exponential backoff
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -182,7 +197,29 @@ export function getHealthStats(breaker: CircuitBreaker): CircuitBreaker.Stats {
 }
 
 /**
- * Check if error is retryable (basic implementation)
+ * Best-effort HTTP status from Error-like objects (node-vikunja / fetch wrappers).
+ */
+function getHttpStatus(error: unknown): number | undefined {
+  if (error === null || typeof error !== 'object') {
+    return undefined;
+  }
+  const e = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+  };
+  const candidates = [e.statusCode, e.status, e.response?.status];
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if error is retryable (basic implementation).
+ * Includes transient Vikunja/SQLite write failures ("database is locked" → HTTP 500).
  */
 export function isRetryableError(error: unknown): error is ErrorWithCode {
   if (error instanceof Error) {
@@ -191,11 +228,19 @@ export function isRetryableError(error: unknown): error is ErrorWithCode {
       return true;
     }
 
+    const status = getHttpStatus(error);
+    if (status === 429 || (typeof status === 'number' && status >= 500 && status < 600)) {
+      return true;
+    }
+
     const message = error.message.toLowerCase();
     return message.includes('timeout') ||
            message.includes('connection') ||
            message.includes('network') ||
            message.includes('rate limit') ||
+           message.includes('internal server error') ||
+           message.includes('database is locked') ||
+           message.includes('sqlite_busy') ||
            (error as ErrorWithCode).code === 'ECONNRESET' ||
            (error as ErrorWithCode).code === 'ETIMEDOUT';
   }
@@ -207,6 +252,11 @@ export function isRetryableError(error: unknown): error is ErrorWithCode {
  */
 export function isTransientError(error: unknown): error is ErrorWithCode {
   if (error instanceof Error) {
+    const status = getHttpStatus(error);
+    if (status === 429 || (typeof status === 'number' && status >= 500 && status < 600)) {
+      return true;
+    }
+
     const message = error.message.toLowerCase();
     return message.includes('timeout') ||
            message.includes('timed out') ||
@@ -219,6 +269,9 @@ export function isTransientError(error: unknown): error is ErrorWithCode {
            message.includes('etimedout') ||
            message.includes('reset by peer') ||
            message.includes('closed unexpectedly') ||
+           message.includes('internal server error') ||
+           message.includes('database is locked') ||
+           message.includes('sqlite_busy') ||
            (error as ErrorWithCode).code === 'ECONNRESET' ||
            (error as ErrorWithCode).code === 'ETIMEDOUT';
   }
@@ -260,6 +313,18 @@ export const RETRY_CONFIG = {
     backoffFactor: 1.5,
     enableCircuitBreaker: true,
     circuitBreakerName: 'vikunja-bulk-operations'
+  },
+  /**
+   * Per-item bulk writes against SQLite-backed Vikunja.
+   * No shared circuit breaker: one locked write must not trip the rest of the batch,
+   * and must not hit the registry-cached 'anonymous' breaker (see #80).
+   */
+  BULK_WRITES: {
+    maxRetries: 3,
+    initialDelay: 200,
+    maxDelay: 5000,
+    backoffFactor: 2,
+    enableCircuitBreaker: false,
   }
 } as const;
 

@@ -85,7 +85,7 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
         createTaskComment: jest.fn(),
         updateTaskLabels: jest.fn(),
         addLabelToTask: jest.fn().mockResolvedValue({}),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
         bulkUpdateTasks: jest.fn(),
       },
@@ -142,10 +142,11 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
 
       const result = await callTool('list', { filter });
 
-      // Verify that only pagination parameters are passed to the API (client-side filtering)
+      // Server-side filter (fork fix for upstream #52)
       expect(mockClient.tasks.getAllTasks).toHaveBeenCalledWith({
         page: 1,
         per_page: 1000,
+        filter,
       });
 
       const markdown = result.content[0].text;
@@ -181,10 +182,11 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
 
       const result = await callTool('list', { filter });
 
-      // Should not pass filter to API (client-side filtering)
+      // Server-side filter (fork fix for upstream #52)
       expect(mockClient.tasks.getAllTasks).toHaveBeenCalledWith({
         page: 1,
         per_page: 1000,
+        filter,
       });
 
       const markdown = result.content[0].text;
@@ -212,6 +214,7 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
       expect(mockClient.tasks.getProjectTasks).toHaveBeenCalledWith(projectId, {
         page: 1,
         per_page: 1000,
+        filter,
       });
 
       const markdown = result.content[0].text;
@@ -237,6 +240,7 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
         per_page: 20,
         sort_by: 'priority',
         s: 'urgent',
+        filter,
       });
 
       const markdown = result.content[0].text;
@@ -263,37 +267,37 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
       {
         filter: 'priority = 5',
         description: 'equals operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: 'priority = 5' },
       },
       {
         filter: 'priority > 3',
         description: 'greater than operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: 'priority > 3' },
       },
       {
         filter: 'priority >= 4',
         description: 'greater than or equal operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: 'priority >= 4' },
       },
       {
         filter: 'priority < 3',
         description: 'less than operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: 'priority < 3' },
       },
       {
         filter: 'priority <= 2',
         description: 'less than or equal operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: 'priority <= 2' },
       },
       {
         filter: "title like 'urgent'",
         description: 'like operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: "title like 'urgent'" },
       },
       {
         filter: 'priority in 3,4,5',
         description: 'in operator',
-        expected: { page: 1, per_page: 1000 },
+        expected: { page: 1, per_page: 1000, filter: 'priority in 3,4,5' },
       },
     ];
 
@@ -331,6 +335,7 @@ describe('Tasks Tool - SQL-like Filter Syntax', () => {
         expect(mockClient.tasks.getAllTasks).toHaveBeenCalledWith({
           page: 1,
           per_page: 1000,
+          filter,
         });
 
         const markdown = result.content[0].text;

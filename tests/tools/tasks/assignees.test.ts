@@ -4,6 +4,10 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { assignUsers, unassignUsers, listAssignees } from '../../../src/tools/tasks/assignees';
+import {
+  findMissingAssigneeIds,
+  AssigneeOperationsService,
+} from '../../../src/tools/tasks/assignees/AssigneeOperationsService';
 import { getClientFromContext } from '../../../src/client';
 import { MCPError, ErrorCode } from '../../../src/types';
 import { isAuthenticationError } from '../../../src/utils/auth-error-handler';
@@ -16,9 +20,17 @@ jest.mock('../../../src/utils/retry');
 jest.mock('../../../src/utils/logger');
 
 describe('Assignee operations', () => {
+  describe('findMissingAssigneeIds', () => {
+    it('returns ids not present on the task', () => {
+      expect(findMissingAssigneeIds([{ id: 1 }], [1, 2])).toEqual([2]);
+      expect(findMissingAssigneeIds(undefined, [1])).toEqual([1]);
+      expect(findMissingAssigneeIds([{ id: 1 }, { id: undefined }], [1])).toEqual([]);
+    });
+  });
+
   const mockClient = {
     tasks: {
-      bulkAssignUsersToTask: jest.fn(),
+      assignUserToTask: jest.fn(),
       removeUserFromTask: jest.fn(),
       getTask: jest.fn(),
     },
@@ -33,23 +45,30 @@ describe('Assignee operations', () => {
 
   describe('assignUsers', () => {
     it('should assign users to task successfully', async () => {
+      const mockTaskEmpty = {
+        id: 123,
+        title: 'Test Task',
+        assignees: [],
+      };
       const mockTask = {
         id: 123,
         title: 'Test Task',
         assignees: [{ id: 1, name: 'User 1' }, { id: 2, name: 'User 2' }],
       };
       
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
-      mockClient.tasks.getTask.mockResolvedValue(mockTask);
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
+      // First getTask: current assignees before add; later: verify/fetch
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce(mockTaskEmpty)
+        .mockResolvedValue(mockTask);
 
       const result = await assignUsers({
         id: 123,
         assignees: [1, 2],
       });
 
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(123, {
-        user_ids: [1, 2],
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(123, 1);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(123, 2);
       expect(mockClient.tasks.getTask).toHaveBeenCalledWith(123);
 
       const markdown = result.content[0].text;
@@ -57,6 +76,34 @@ describe('Assignee operations', () => {
       expect(markdown).toContain("## ✅ Success");
       expect(markdown).toContain('assign');
       expect(markdown).toContain('Users assigned to task successfully');
+    });
+
+    it('should warn when assignees are not persisted (silent API failure)', async () => {
+      // Simulate the API accepting the assign call but not persisting assignees
+      const mockTaskNoAssignees = {
+        id: 123,
+        title: 'Test Task',
+        assignees: [],
+      };
+
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
+      mockClient.tasks.getTask.mockResolvedValue(mockTaskNoAssignees);
+
+      const result = await assignUsers({
+        id: 123,
+        assignees: [1, 2],
+      });
+
+      const markdown = result.content[0].text;
+      expect(markdown).toContain('not persisted');
+      expect(markdown).toContain('silent no-op');
+    });
+
+    it('verifyAssignees fails open when re-fetch throws', async () => {
+      mockClient.tasks.getTask.mockRejectedValue(new Error('network'));
+      await expect(
+        AssigneeOperationsService.verifyAssignees(123, [1]),
+      ).resolves.toEqual([]);
     });
 
     it('should throw error when task id is missing', async () => {
@@ -96,6 +143,7 @@ describe('Assignee operations', () => {
     });
 
     it('should handle authentication errors with retry', async () => {
+      mockClient.tasks.getTask.mockResolvedValue({ id: 123, title: 'T', assignees: [] });
       const authError = new Error('Authentication failed');
       (isAuthenticationError as jest.Mock).mockReturnValue(true);
       (withRetry as jest.Mock).mockRejectedValue(authError);
@@ -106,6 +154,7 @@ describe('Assignee operations', () => {
     });
 
     it('should handle non-authentication API errors', async () => {
+      mockClient.tasks.getTask.mockResolvedValue({ id: 123, title: 'T', assignees: [] });
       const apiError = new Error('API Error');
       (withRetry as jest.Mock).mockRejectedValue(apiError);
 
@@ -115,6 +164,7 @@ describe('Assignee operations', () => {
     });
 
     it('should handle unknown error types', async () => {
+      mockClient.tasks.getTask.mockResolvedValue({ id: 123, title: 'T', assignees: [] });
       const unknownError = { message: 'Unknown error' };
       (withRetry as jest.Mock).mockRejectedValue(unknownError);
 
@@ -346,9 +396,11 @@ describe('Assignee operations', () => {
         assignees: [{ id: 1, name: 'User 1' }],
       };
       
-      // Mock assignment
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
-      mockClient.tasks.getTask.mockResolvedValue(assignedTask);
+      // Mock assignment — first getTask is current (empty), later fetch shows assigned
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce(initialTask)
+        .mockResolvedValue(assignedTask);
       
       const assignResult = await assignUsers({ id: 123, assignees: [1] });
 

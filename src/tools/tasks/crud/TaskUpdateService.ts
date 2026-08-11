@@ -10,6 +10,7 @@ import { validateDateString, validateId, convertRepeatConfiguration, validatePer
 import { isAuthenticationError } from '../../../utils/auth-error-handler';
 import { RETRY_CONFIG } from '../../../utils/retry';
 import { addLabelsToTaskAdditive } from '../labels';
+import { addAssigneesToTaskAdditive } from '../assignees';
 import { transformApiError, handleFetchError, handleStatusCodeError } from '../../../utils/error-handler';
 import { AUTH_ERROR_MESSAGES } from '../constants';
 import { createTaskResponse } from './TaskResponseFormatter';
@@ -269,16 +270,18 @@ async function updateTaskAssignees(client: VikunjaClient, taskId: number, newAss
   try {
     // Get current assignees to calculate diff
     const currentTask = await client.tasks.getTask(taskId);
-    const currentAssigneeIds = currentTask.assignees?.map((a) => a.id) || [];
+    const currentAssigneeIds = (currentTask.assignees ?? [])
+      .map((a) => a.id)
+      .filter((id): id is number => typeof id === 'number');
 
     // Calculate which assignees to add and remove
     const toAdd = newAssigneeIds.filter((id: number) => !currentAssigneeIds.includes(id));
     const toRemove = currentAssigneeIds.filter((id: number) => !newAssigneeIds.includes(id));
 
-    // Add new assignees first to avoid leaving task unassigned if removal fails
+    // Add new assignees first (individual PUT — bulk {user_ids} is a silent no-op)
     if (toAdd.length > 0) {
-      await client.tasks.bulkAssignUsersToTask(taskId, {
-        user_ids: toAdd,
+      await addAssigneesToTaskAdditive(client, taskId, toAdd, {
+        currentAssigneeIds,
       });
     }
 

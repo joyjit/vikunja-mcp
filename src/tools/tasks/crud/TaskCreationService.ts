@@ -8,10 +8,11 @@ import { getClientFromContext } from '../../../client';
 import type { Task, VikunjaClient } from 'node-vikunja';
 import { logger } from '../../../utils/logger';
 import { isAuthenticationError } from '../../../utils/auth-error-handler';
-import { withRetry, RETRY_CONFIG } from '../../../utils/retry';
+import { RETRY_CONFIG } from '../../../utils/retry';
 import { transformApiError, handleFetchError } from '../../../utils/error-handler';
 import { sanitizeString } from '../../../utils/validation';
 import { addLabelsToTaskAdditive } from '../labels';
+import { addAssigneesToTaskAdditive, findMissingAssigneeIds } from '../assignees';
 import { AUTH_ERROR_MESSAGES } from '../constants';
 import { validateDateString, validateId, convertRepeatConfiguration, validatePercentDone } from '../validation';
 import { createTaskResponse } from './TaskResponseFormatter';
@@ -167,6 +168,20 @@ export async function createTask(args: CreateTaskArgs): Promise<{ content: Array
       }
     }
 
+    // Verify assignees stuck — same silent no-op class as labels (upstream #15)
+    if (args.assignees && args.assignees.length > 0) {
+      const missingAssignees = findMissingAssigneeIds(completeTask.assignees, args.assignees);
+      if (missingAssignees.length > 0) {
+        await rollbackTaskCreation(
+          client,
+          creationState,
+          new Error(
+            `Assignees were requested but not attached after create (missing user ids: ${missingAssignees.join(', ')})`,
+          ),
+        );
+      }
+    }
+
     const response = createTaskResponse(
       'create-task',
       'Task created successfully',
@@ -239,21 +254,13 @@ async function addLabelsToTask(client: VikunjaClient, taskId: number, labelIds: 
 }
 
 /**
- * Adds assignees to a task with retry logic for authentication errors
+ * Adds assignees via the individual PUT endpoint (bulk {user_ids} is a silent no-op).
  */
 async function addAssigneesToTask(client: VikunjaClient, taskId: number, assigneeIds: number[]): Promise<void> {
   try {
-    await withRetry(
-      () => client.tasks.bulkAssignUsersToTask(taskId, {
-        user_ids: assigneeIds,
-      }),
-      {
-        ...RETRY_CONFIG.AUTH_ERRORS,
-        shouldRetry: (error) => isAuthenticationError(error)
-      }
-    );
+    // Newly created task has no assignees yet — skip the extra read.
+    await addAssigneesToTaskAdditive(client, taskId, assigneeIds, { currentAssigneeIds: [] });
   } catch (assigneeError) {
-    // Check if it's an auth error after retries
     if (isAuthenticationError(assigneeError)) {
       throw new MCPError(
         ErrorCode.API_ERROR,

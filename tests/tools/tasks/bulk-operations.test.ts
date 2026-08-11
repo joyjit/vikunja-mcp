@@ -29,7 +29,7 @@ describe('Bulk operations', () => {
       updateTask: jest.fn(),
       deleteTask: jest.fn(),
       createTask: jest.fn(),
-      bulkAssignUsersToTask: jest.fn(),
+      assignUserToTask: jest.fn(),
       removeUserFromTask: jest.fn(),
       updateTaskLabels: jest.fn(),
       addLabelToTask: jest.fn().mockResolvedValue({}),
@@ -285,18 +285,15 @@ describe('Bulk operations', () => {
       it('should handle assignees field', async () => {
         const mockTask = { id: 1, title: 'Task 1', assignees: [] };
 
-        mockClient.tasks.getTask
-          .mockResolvedValueOnce({ id: 1, title: 'Task 1', assignees: [] })
-          .mockResolvedValueOnce({ id: 1, title: 'Task 1', assignees: [{ id: 1 }] })
-          .mockResolvedValueOnce({ id: 1, title: 'Task 1', assignees: [{ id: 1 }] });
+        // 1) merge read  2) current-assignees read for additive add
+        mockClient.tasks.getTask.mockResolvedValue({ id: 1, title: 'Task 1', assignees: [] });
         mockClient.tasks.updateTask.mockResolvedValue(mockTask);
-        mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
+        mockClient.tasks.assignUserToTask.mockResolvedValue({});
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => fn());
 
         const result = await bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [1] });
 
-        expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(1, {
-          user_ids: [1],
-        });
+        expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(1, 1);
 
         const markdown = result.content[0].text;
         expect(markdown).toContain('## ✅ Success');
@@ -522,7 +519,7 @@ describe('Bulk operations', () => {
 
         mockClient.tasks.createTask.mockResolvedValue(mockTask);
         mockClient.tasks.updateTaskLabels.mockResolvedValue({});
-        mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
+        mockClient.tasks.assignUserToTask.mockResolvedValue({});
         mockClient.tasks.getTask.mockResolvedValue({
           ...mockTask,
           labels: [{ id: 1 }],
@@ -544,9 +541,7 @@ describe('Bulk operations', () => {
           task_id: 1,
           label_id: 1,
         });
-        expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(1, {
-          user_ids: [1],
-        });
+        expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(1, 1);
 
         const markdown = result.content[0].text;
         const parsed = parseMarkdown(markdown);
@@ -747,21 +742,21 @@ describe('Bulk operations', () => {
         .mockResolvedValueOnce({ id: 1, title: 'T' }) // no assignees
         .mockResolvedValueOnce({ id: 1, title: 'T' });
       mockClient.tasks.updateTask.mockResolvedValue({ id: 1, title: 'T' });
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
+      mockClient.tasks.assignUserToTask.mockResolvedValue(undefined);
 
       await bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [3] });
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalled();
 
       mockClient.tasks.createTask.mockResolvedValue({ id: 10, title: 'N' });
       mockClient.tasks.addLabelToTask.mockResolvedValue({});
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
+      mockClient.tasks.assignUserToTask.mockResolvedValue(undefined);
       await bulkCreateTasks({
         projectId: 1,
         tasks: [{ title: 'N', labels: [1], assignees: [2] }],
       });
       expect(mockClient.tasks.updateTaskLabels).not.toHaveBeenCalled();
       expect(mockClient.tasks.addLabelToTask).toHaveBeenCalled();
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalled();
     });
 
     it('rethrows assignee auth errors during remove', async () => {

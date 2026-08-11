@@ -41,7 +41,7 @@ describe('Labels Tool', () => {
         createTaskComment: jest.fn(),
         updateTaskLabels: jest.fn(),
         addLabelToTask: jest.fn().mockResolvedValue({}),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
         bulkUpdateTasks: jest.fn(),
       },

@@ -7,6 +7,7 @@ import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logg
 import type { Assignee } from '../../types';
 import { withRetry } from '../../utils/retry';
 import { addLabelsToTaskAdditive } from './labels';
+import { addAssigneesToTaskAdditive } from './assignees';
 import { BatchProcessor } from '../../utils/performance/batch-processor';
 import type { Task } from 'node-vikunja';
 import { convertRepeatConfiguration, applyFieldUpdate } from './validation';
@@ -86,16 +87,23 @@ export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: 
       const updated = await client.tasks.updateTask(taskId, update);
 
       if (args.field === 'assignees' && Array.isArray(args.value)) {
-        const currentAssignees = (await client.tasks.getTask(taskId)).assignees?.map((a: Assignee) => a.id) || [];
-        if (args.value.length > 0) {
+        const desired = args.value as number[];
+        const currentAssignees = (await client.tasks.getTask(taskId)).assignees
+          ?.map((a: Assignee) => a.id)
+          .filter((id): id is number => typeof id === 'number') || [];
+        const toAdd = desired.filter((id) => !currentAssignees.includes(id));
+        const toRemove = currentAssignees.filter((id) => !desired.includes(id));
+        if (toAdd.length > 0) {
           try {
-            await withRetry(() => client.tasks.bulkAssignUsersToTask(taskId, { user_ids: args.value as number[] }), { ...RETRY_CONFIG.AUTH_ERRORS, shouldRetry: isAuthenticationError });
+            await addAssigneesToTaskAdditive(client, taskId, toAdd, {
+              currentAssigneeIds: currentAssignees,
+            });
           } catch (assigneeError) {
             if (isAuthenticationError(assigneeError)) throw new MCPError(ErrorCode.API_ERROR, 'Assignee operations may have authentication issues');
             throw assigneeError;
           }
         }
-        for (const userId of currentAssignees) {
+        for (const userId of toRemove) {
           try { await withRetry(() => client.tasks.removeUserFromTask(taskId, userId), { ...RETRY_CONFIG.AUTH_ERRORS, shouldRetry: isAuthenticationError }); }
           catch (e) { if (isAuthenticationError(e)) throw new MCPError(ErrorCode.API_ERROR, `${AUTH_ERROR_MESSAGES.ASSIGNEE_REMOVE_PARTIAL} (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`); throw e; }
         }
@@ -205,7 +213,9 @@ export async function bulkCreateTasks(args: BulkCreateArgs): Promise<{ content: 
           const assignees = t.assignees;
           if (assignees && assignees.length > 0) {
             try {
-              await withRetry(() => client.tasks.bulkAssignUsersToTask(createdId, { user_ids: assignees }), { maxRetries: RETRY_CONFIG.AUTH_ERRORS.maxRetries ?? 3, timeout: (RETRY_CONFIG.AUTH_ERRORS.initialDelay ?? 1000) + (RETRY_CONFIG.AUTH_ERRORS.maxDelay ?? 10000), shouldRetry: isAuthenticationError });
+              await addAssigneesToTaskAdditive(client, createdId, assignees, {
+                currentAssigneeIds: [],
+              });
             } catch (assigneeError) {
               if (isAuthenticationError(assigneeError)) {
                 throw new MCPError(ErrorCode.API_ERROR, 'Assignee operations may have authentication issues');

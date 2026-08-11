@@ -3,6 +3,7 @@ import type { TaskCreationData } from '../types';
 import { MCPError, ErrorCode } from '../types';
 import { isAuthenticationError } from '../utils/auth-error-handler';
 import { addLabelsToTaskAdditive } from '../tools/tasks/labels';
+import { addAssigneesToTaskAdditive } from '../tools/tasks/assignees';
 import type { Task, Label, User } from 'node-vikunja';
 import type { TypedVikunjaClient } from '../types/node-vikunja-extended';
 import type { ImportedTask } from '../parsers/InputParserFactory';
@@ -415,9 +416,12 @@ export class TaskCreationService {
 
     if (userIds.length > 0 && createdTask.id) {
       try {
-        await client.tasks.bulkAssignUsersToTask(createdTask.id, {
-          user_ids: userIds,
-        });
+        await addAssigneesToTaskAdditive(
+          client as unknown as Parameters<typeof addAssigneesToTaskAdditive>[0],
+          createdTask.id,
+          userIds,
+          { currentAssigneeIds: [] },
+        );
       } catch (assignError) {
         logger.error('Failed to assign users to task', {
           taskId: createdTask.id,

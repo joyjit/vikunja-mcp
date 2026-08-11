@@ -41,7 +41,7 @@ describe('Labels: update is additive, never destructive (upstream #92)', () => {
       addLabelToTask: jest.fn(),
       removeLabelFromTask: jest.fn(),
       updateTaskLabels: jest.fn(),
-      bulkAssignUsersToTask: jest.fn(),
+      assignUserToTask: jest.fn(),
       removeUserFromTask: jest.fn(),
     },
   };

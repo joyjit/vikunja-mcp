@@ -4,9 +4,15 @@
  */
 
 import { MCPError, ErrorCode } from '../../../types';
-import { AssigneeOperationsService } from './AssigneeOperationsService';
+import {
+  AssigneeOperationsService,
+  addAssigneesToTaskAdditive,
+  findMissingAssigneeIds,
+} from './AssigneeOperationsService';
 import { AssigneeValidationService } from './AssigneeValidationService';
 import { AssigneeResponseFormatter } from './AssigneeResponseFormatter';
+
+export { addAssigneesToTaskAdditive, findMissingAssigneeIds };
 
 /**
  * Assign users to a task
@@ -18,14 +24,20 @@ export async function assignUsers(args: {
   try {
     const { taskId, assigneeIds } = AssigneeValidationService.validateAssignInput(args);
 
-    // Perform the assignment operation
+    // Perform the assignment operation (per-user PUT — bulk {user_ids} is a silent no-op)
     await AssigneeOperationsService.assignUsersToTask(taskId, assigneeIds);
 
-    // Fetch updated task data
+    // Fetch once and verify assignees actually persisted
     const task = await AssigneeOperationsService.fetchTaskWithAssignees(taskId);
+    const missingIds = findMissingAssigneeIds(task.assignees, assigneeIds);
 
-    // Format and return response
     const response = AssigneeResponseFormatter.formatAssignResponse(task);
+    if (missingIds.length > 0) {
+      response.success = false;
+      response.message =
+        `Assignee operation reported success, but user(s) [${missingIds.join(', ')}] were not persisted. ` +
+        `Vikunja accepted the request without applying it (known silent no-op on the bulk assignee API).`;
+    }
     return AssigneeResponseFormatter.formatMcpResponse(response);
 
   } catch (error) {

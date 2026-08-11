@@ -33,7 +33,7 @@ describe('TaskCreationService', () => {
         // tests can assert it is NOT called.
         updateTaskLabels: jest.fn(),
         addLabelToTask: jest.fn(),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn(),
       },
     } as jest.Mocked<TypedVikunjaClient>;
 
@@ -92,7 +92,7 @@ describe('TaskCreationService', () => {
           { id: 2, title: 'bug' } as Label,
         ],
       });
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
 
       // Act
       const result = await taskCreationService.createTask(
@@ -442,9 +442,8 @@ describe('TaskCreationService', () => {
       // Assert
       expect(result.success).toBe(true);
       expect(result.warnings).toBeUndefined();
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(123, {
-        user_ids: [101, 102],
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(123, 101);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(123, 102);
     });
 
     it('should handle user assignment when no users are available', async () => {
@@ -478,7 +477,7 @@ describe('TaskCreationService', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings![0]).toContain('Assignees skipped due to user fetch failure');
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
     });
 
     it('should handle user assignment error', async () => {
@@ -495,7 +494,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.bulkAssignUsersToTask.mockRejectedValue(new Error('User assignment failed'));
+      mockClient.tasks.assignUserToTask.mockRejectedValue(new Error('User assignment failed'));
 
       // Act
       const result = await taskCreationService.createTask(
@@ -526,7 +525,7 @@ describe('TaskCreationService', () => {
       } as Task;
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
 
       // Act
       const result = await taskCreationService.createTask(
@@ -540,9 +539,8 @@ describe('TaskCreationService', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings![0]).toContain('Users not found: unknown');
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(123, {
-        user_ids: [101, 102], // Only found users
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(123, 101);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(123, 102);
     });
   });
 
@@ -619,7 +617,7 @@ describe('TaskCreationService', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toBeUndefined();
       expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
     });
 
     it('should handle undefined optional properties', async () => {
@@ -710,7 +708,7 @@ describe('TaskCreationService', () => {
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
       mockClient.tasks.addLabelToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue(createdTask); // Simulate label verification failure
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
 
       // Act
       const result = await taskCreationService.createTask(

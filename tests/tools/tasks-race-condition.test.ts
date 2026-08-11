@@ -77,7 +77,7 @@ describe('Tasks Tool - Race Condition Fix', () => {
         createTask: jest.fn(),
         updateTaskLabels: jest.fn(),
         addLabelToTask: jest.fn().mockResolvedValue({}),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn(),
         getTask: jest.fn(),
         deleteTask: jest.fn(),
         updateTask: jest.fn(),
@@ -146,7 +146,7 @@ describe('Tasks Tool - Race Condition Fix', () => {
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
       mockClient.tasks.addLabelToTask.mockResolvedValue({});
-      mockClient.tasks.bulkAssignUsersToTask.mockRejectedValue(new Error('User assignment failed'));
+      mockClient.tasks.assignUserToTask.mockRejectedValue(new Error('User assignment failed'));
 
       const args = {
         subcommand: 'create',
@@ -227,7 +227,7 @@ describe('Tasks Tool - Race Condition Fix', () => {
 
       mockClient.tasks.createTask.mockResolvedValue(createdTask);
       mockClient.tasks.addLabelToTask.mockResolvedValue({});
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue({});
+      mockClient.tasks.assignUserToTask.mockResolvedValue({});
       mockClient.tasks.getTask.mockResolvedValue(completeTask);
 
       const args = {

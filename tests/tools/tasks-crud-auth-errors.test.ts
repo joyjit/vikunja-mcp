@@ -80,7 +80,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
         updateTaskLabels: jest.fn(),
         // Labels applied one-by-one via PUT /tasks/{id}/labels (upstream #92).
         addLabelToTask: jest.fn(),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
       },
     } as any;
@@ -157,7 +157,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       
       // Mock assignee assignment failure with 401 auth error
       const authError = createAuthError(401, 'Unauthorized to assign users');
-      mockClient.tasks.bulkAssignUsersToTask.mockRejectedValue(authError);
+      mockClient.tasks.assignUserToTask.mockRejectedValue(authError);
       
       // Mock successful task deletion for rollback
       mockClient.tasks.deleteTask.mockResolvedValue(undefined);
@@ -196,7 +196,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       
       // Mock assignee assignment failure with 403 auth error
       const authError = createAxiosAuthError(403, 'Forbidden to assign users');
-      mockClient.tasks.bulkAssignUsersToTask.mockRejectedValue(authError);
+      mockClient.tasks.assignUserToTask.mockRejectedValue(authError);
       
       // Mock successful task deletion for rollback
       mockClient.tasks.deleteTask.mockResolvedValue(undefined);
@@ -289,7 +289,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       mockClient.tasks.updateTask.mockResolvedValue(taskWithAssignees);
       
       // Mock successful assignee addition but failed removal with auth error
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
+      mockClient.tasks.assignUserToTask.mockResolvedValue(undefined);
       const authError = createAuthError(401, 'Unauthorized to remove assignee');
       mockClient.tasks.removeUserFromTask.mockRejectedValue(authError);
 
@@ -381,7 +381,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       mockClient.tasks.getTask
         .mockResolvedValueOnce(mockTask) // Initial fetch
         .mockResolvedValueOnce(mockTask); // For assignee diff calculation
-      mockClient.tasks.bulkAssignUsersToTask.mockRejectedValue(authError);
+      mockClient.tasks.assignUserToTask.mockRejectedValue(authError);
 
       await expect(
         updateTask({
@@ -482,7 +482,7 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
         .mockResolvedValueOnce(taskWithoutAssignees)
         .mockResolvedValueOnce(taskWithoutAssignees);
       mockClient.tasks.updateTask.mockResolvedValue(taskWithoutAssignees);
-      mockClient.tasks.bulkAssignUsersToTask.mockResolvedValue(undefined);
+      mockClient.tasks.assignUserToTask.mockResolvedValue(undefined);
 
       const result = await updateTask({
         id: 1,
@@ -490,9 +490,8 @@ describe('Tasks CRUD - Authentication Error Handling', () => {
       });
 
       // Should handle undefined assignees gracefully and add new ones
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(1, {
-        user_ids: [1, 2],
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(1, 1);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(1, 2);
     });
   });
 });

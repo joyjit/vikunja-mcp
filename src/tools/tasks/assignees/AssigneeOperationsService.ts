@@ -6,36 +6,89 @@
 import type { MinimalTask, TaskWithAssignees, Assignee } from '../../../types';
 import { MCPError, ErrorCode } from '../../../types';
 import { getClientFromContext } from '../../../client';
+import type { VikunjaClient } from 'node-vikunja';
 import { isAuthenticationError } from '../../../utils/auth-error-handler';
 import { withRetry, RETRY_CONFIG } from '../../../utils/retry';
 import { AUTH_ERROR_MESSAGES } from '../constants';
+
+/**
+ * Adds assignees to a task WITHOUT replacing the ones it already has.
+ *
+ * `node-vikunja`'s `bulkAssignUsersToTask` posts `{user_ids: [...]}` to
+ * `POST /tasks/{id}/assignees/bulk`, but Vikunja expects
+ * `{assignees: [{id: N}]}`. The unknown field is ignored, the server returns
+ * HTTP 201 with nobody assigned, and callers that trust 2xx report success
+ * (upstream issue #15 / node-vikunja#3).
+ *
+ * Even with a correct bulk payload, that endpoint replaces the whole set.
+ * The individual endpoint (`PUT /tasks/{id}/assignees` with `{user_id}`)
+ * actually applies and is additive — same pattern as labels.
+ *
+ * @param currentAssigneeIds IDs already on the task. Read from the server if omitted.
+ *        Callers that have just CREATED the task pass `[]` and skip the read.
+ */
+export async function addAssigneesToTaskAdditive(
+  client: VikunjaClient,
+  taskId: number,
+  assigneeIds: number[],
+  options: { currentAssigneeIds?: number[] } = {},
+): Promise<{ added: number[]; kept: number[] }> {
+  let kept = options.currentAssigneeIds;
+  if (kept === undefined) {
+    const currentTask = await client.tasks.getTask(taskId);
+    kept = (currentTask.assignees ?? [])
+      .map((assignee) => assignee.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
+
+  const requested = [...new Set(assigneeIds)];
+  const toAdd = requested.filter((id) => !kept.includes(id));
+
+  for (const userId of toAdd) {
+    await withRetry(
+      () => Promise.resolve(client.tasks.assignUserToTask(taskId, userId)),
+      {
+        ...RETRY_CONFIG.AUTH_ERRORS,
+        shouldRetry: (error: unknown) => isAuthenticationError(error),
+      },
+    );
+  }
+
+  return { added: toAdd, kept };
+}
+
+/**
+ * Returns requested assignee IDs that are missing from a task payload.
+ */
+export function findMissingAssigneeIds(
+  assignees: Array<{ id?: number }> | undefined,
+  requestedIds: number[],
+): number[] {
+  const persistedIds = new Set(
+    (assignees || [])
+      .map((a) => a.id)
+      .filter((id): id is number => typeof id === 'number'),
+  );
+  return requestedIds.filter((id) => !persistedIds.has(id));
+}
 
 /**
  * Service for managing task assignee operations
  */
 export const AssigneeOperationsService = {
   /**
-   * Assign multiple users to a task
+   * Assign multiple users to a task (additive; does not clear existing assignees).
    */
   async assignUsersToTask(taskId: number, assigneeIds: number[]): Promise<void> {
     const client = await getClientFromContext();
 
     try {
-      await withRetry(
-        () => client.tasks.bulkAssignUsersToTask(taskId, {
-          user_ids: assigneeIds,
-        }),
-        {
-          ...RETRY_CONFIG.AUTH_ERRORS,
-          shouldRetry: (error) => isAuthenticationError(error)
-        }
-      );
+      await addAssigneesToTaskAdditive(client, taskId, assigneeIds);
     } catch (assigneeError) {
-      // Check if it's an auth error after retries
       if (isAuthenticationError(assigneeError)) {
         throw new MCPError(
           ErrorCode.API_ERROR,
-          `${AUTH_ERROR_MESSAGES.ASSIGNEE_ASSIGN} (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`
+          `${AUTH_ERROR_MESSAGES.ASSIGNEE_ASSIGN} (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`,
         );
       }
       throw assigneeError;
@@ -55,15 +108,15 @@ export const AssigneeOperationsService = {
           () => client.tasks.removeUserFromTask(taskId, userId),
           {
             ...RETRY_CONFIG.AUTH_ERRORS,
-            shouldRetry: (error) => isAuthenticationError(error)
-          }
+            shouldRetry: (error) => isAuthenticationError(error),
+          },
         );
       } catch (removeError) {
         // Check if it's an auth error after retries
         if (isAuthenticationError(removeError)) {
           throw new MCPError(
             ErrorCode.API_ERROR,
-            `${AUTH_ERROR_MESSAGES.ASSIGNEE_REMOVE} (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`
+            `${AUTH_ERROR_MESSAGES.ASSIGNEE_REMOVE} (Retried ${RETRY_CONFIG.AUTH_ERRORS.maxRetries} times)`,
           );
         }
         throw removeError;
@@ -107,5 +160,19 @@ export const AssigneeOperationsService = {
       title: task.title,
       assignees: assignees,
     };
-  }
+  },
+
+  /**
+   * Re-fetch the task and return requested IDs that did not persist.
+   * Empty result means either all stuck, or verification itself failed (fail-open).
+   */
+  async verifyAssignees(taskId: number, requestedIds: number[]): Promise<number[]> {
+    try {
+      const task = await AssigneeOperationsService.fetchTaskWithAssignees(taskId);
+      return findMissingAssigneeIds(task.assignees, requestedIds);
+    } catch {
+      // If we can't verify, don't block — return empty (assume OK)
+      return [];
+    }
+  },
 };

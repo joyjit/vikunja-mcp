@@ -49,7 +49,7 @@ describe('Tasks Memory Protection', () => {
         createTaskComment: jest.fn(),
         updateTaskLabels: jest.fn(),
         addLabelToTask: jest.fn().mockResolvedValue({}),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn(),
         removeUserFromTask: jest.fn(),
         bulkUpdateTasks: jest.fn(),
       },
@@ -475,7 +475,7 @@ describe('Tasks Memory Protection', () => {
 
       expect(mockClient.tasks.getAllTasks).toHaveBeenCalled();
       expect(result.content[0].text).toContain('**success:** true');
-      expect(result.content[0].text).toContain('**clientSideFiltering:** true');
+      expect(result.content[0].text).toContain('**serverSideFilteringUsed:** true');
     });
   });
 });

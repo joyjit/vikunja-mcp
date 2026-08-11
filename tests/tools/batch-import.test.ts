@@ -81,7 +81,7 @@ describe('Batch Import Tool', () => {
         // en el mock porque algunos tests comprueban que ya NO se llama.
         updateTaskLabels: jest.fn(),
         addLabelToTask: jest.fn().mockResolvedValue({}),
-        bulkAssignUsersToTask: jest.fn(),
+        assignUserToTask: jest.fn().mockResolvedValue({}),
         getTask: jest.fn((id) =>
           Promise.resolve({
             id,
@@ -264,9 +264,8 @@ describe('Batch Import Tool', () => {
 
       expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(103, { task_id: 103, label_id: 1 });
       expect(mockClient.tasks.addLabelToTask).toHaveBeenCalledWith(103, { task_id: 103, label_id: 2 });
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(103, {
-        user_ids: [10, 11],
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(103, 10);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(103, 11);
     });
 
     it('should validate JSON format', async () => {
@@ -622,7 +621,7 @@ Description,1`;
 
       // Should not call bulk assign with empty arrays
       expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       // Should have warnings about labels not found
       expect(result.content[0].text).toContain('Warnings:');
@@ -1019,7 +1018,7 @@ Description,1`;
       
       // Should not try to update labels or assignees when they are empty
       expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
     });
 
     it('should handle label assignment when updateTaskLabels returns without error but labels were not actually assigned', async () => {
@@ -1144,8 +1143,8 @@ Description,1`;
         data: JSON.stringify(taskData),
       });
 
-      // Should not call bulkAssignUsersToTask since no users found
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      // Should not call assignUserToTask since no users found
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       // Should not show auth-specific warning
       expect(result.content[0].text).not.toContain('Vikunja API authentication issue');
@@ -1401,9 +1400,7 @@ Description,1`;
       });
 
       // Should only assign 'john'
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(1901, {
-        user_ids: [10],
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(1901, 10);
     });
 
     it('should handle non-Error in final catch block', async () => {
@@ -1623,13 +1620,12 @@ Description,1`;
         data: csvData,
       });
 
-      // First task should assign users
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(2401, {
-        user_ids: [10, 11],
-      });
+      // First task should assign users (one call per user id)
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(2401, 10);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(2401, 11);
       
-      // Second task should not call bulkAssignUsersToTask
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledTimes(1);
+      // Second task (empty assignees) should not add more calls
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledTimes(2);
     });
 
     it('should handle getLabels error that is not Error instance', async () => {
@@ -1689,7 +1685,7 @@ Description,1`;
       
       // Should not try to update labels/assignees for first two tasks
       expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
     });
 
     it('should handle auth error with non-Error object during task creation', async () => {
@@ -1836,9 +1832,8 @@ Description,1`;
       });
 
       // Should map both users correctly despite case differences
-      expect(mockClient.tasks.bulkAssignUsersToTask).toHaveBeenCalledWith(3401, {
-        user_ids: [10, 11],
-      });
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(3401, 10);
+      expect(mockClient.tasks.assignUserToTask).toHaveBeenCalledWith(3401, 11);
     });
 
     it('should handle labels response defensive fallback', async () => {
@@ -1887,7 +1882,7 @@ Description,1`;
       // Should complete but skip labels/assignees
       expect(result.content[0].text).toContain('Successfully imported: 1 tasks');
       expect(mockClient.tasks.addLabelToTask).not.toHaveBeenCalled();
-      expect(mockClient.tasks.bulkAssignUsersToTask).not.toHaveBeenCalled();
+      expect(mockClient.tasks.assignUserToTask).not.toHaveBeenCalled();
     });
 
     it('should handle getLabels throwing error with Error instance having no message', async () => {

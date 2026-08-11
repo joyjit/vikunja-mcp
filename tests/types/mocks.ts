@@ -59,7 +59,7 @@ export interface MockTaskService {
   getTaskComments: MockedFunction<(taskId: number) => Promise<TaskComment[]>>;
   createTaskComment: MockedFunction<(taskId: number, comment: string) => Promise<TaskComment>>;
   updateTaskLabels: MockedFunction<(taskId: number, labels: Label[]) => Promise<Label[]>>;
-  bulkAssignUsersToTask: MockedFunction<(taskId: number, assignees: User[]) => Promise<Message>>;
+  assignUserToTask: MockedFunction<(taskId: number, userId: number) => Promise<Message>>;
   removeUserFromTask: MockedFunction<(taskId: number, userId: number) => Promise<Message>>;
   bulkUpdateTasks: MockedFunction<(tasks: Task[]) => Promise<Task[]>>;
 }

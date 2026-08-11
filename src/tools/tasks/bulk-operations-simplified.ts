@@ -5,7 +5,7 @@
 
 import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logger, isAuthenticationError, transformApiError, handleFetchError } from '../../index';
 import type { Assignee } from '../../types';
-import { withRetry, isRetryableError, RETRY_CONFIG } from '../../utils/retry';
+import { withRetry, isRetryableError, RETRY_CONFIG, type RetryOptions } from '../../utils/retry';
 import { addLabelsToTaskAdditive } from './labels';
 import { addAssigneesToTaskAdditive } from './assignees';
 import { BatchProcessor } from '../../utils/performance/batch-processor';
@@ -44,7 +44,7 @@ const processors = {
 };
 
 /** Built at call time so partial test mocks of RETRY_CONFIG cannot crash module load. */
-function bulkWriteRetryOptions() {
+function bulkWriteRetryOptions(): RetryOptions {
   return {
     ...(RETRY_CONFIG.BULK_WRITES ?? {
       maxRetries: 3,

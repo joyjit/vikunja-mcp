@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.2 — 2026-08-11
+
+### Fixes
+
+- Serialize bulk create/update writes (default concurrency 1) and retry SQLite lock / 5xx errors (`VIKUNJA_BULK_WRITE_CONCURRENCY` to raise on Postgres)
+- Assignees on create/assign use per-user APIs and verify persistence (Vikunja ignores the bulk assign body)
+- Labels use additive `PUT` instead of the bulk labels route that cleared labels
+- Task `percentDone` (0–100) on create / update / bulk
+- Filtered task lists apply `done` / `filter` server-side before pagination (client-side fallback unchanged)
+
+### Platform
+
+- Bump nested dep overrides (`js-yaml`, audit pins) so npm audit stays clean
+- README updated for fork highlights, team ops, and bulk concurrency
+
 ## 0.3.1 — 2026-07-26
 
 ### Fixes

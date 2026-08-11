@@ -23,7 +23,7 @@ import type { BulkUpdateArgs, BulkDeleteArgs, BulkCreateArgs, BulkCreateTaskData
  * "database is locked" → HTTP 500. Default to one write at a time; override with
  * VIKUNJA_BULK_WRITE_CONCURRENCY when the backend can take more (e.g. Postgres).
  */
-function resolveBulkWriteConcurrency(fallback = 1): number {
+export function resolveBulkWriteConcurrency(fallback = 1): number {
   const raw = process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
   if (raw === undefined || raw === '') {
     return fallback;

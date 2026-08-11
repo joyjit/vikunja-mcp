@@ -285,6 +285,14 @@ describe('retry utility', () => {
       const nested = new Error('upstream');
       (nested as Error & { response: { status: number } }).response = { status: 502 };
       expect(isRetryableError(nested)).toBe(true);
+
+      const nonNumeric = new Error('weird status');
+      (nonNumeric as Error & { status: string }).status = '500';
+      expect(isRetryableError(nonNumeric)).toBe(false);
+
+      const infinite = new Error('infinite');
+      (infinite as Error & { statusCode: number }).statusCode = Number.POSITIVE_INFINITY;
+      expect(isRetryableError(infinite)).toBe(false);
     });
 
     it('should not retry client validation errors', () => {

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { bulkUpdateTasks, bulkDeleteTasks, bulkCreateTasks, resolveBulkUpdateValue } from '../../../src/tools/tasks/bulk-operations';
+import { bulkUpdateTasks, bulkDeleteTasks, bulkCreateTasks, resolveBulkUpdateValue, resolveBulkWriteConcurrency } from '../../../src/tools/tasks/bulk-operations';
 import { getClientFromContext } from '../../../src/client';
 import { MCPError, ErrorCode } from '../../../src/types';
 import { isAuthenticationError } from '../../../src/utils/auth-error-handler';
@@ -20,6 +20,35 @@ describe('Bulk operations', () => {
     expect(resolveBulkUpdateValue('repeat_mode', 'month')).toBe(1);
     expect(resolveBulkUpdateValue('repeat_mode', 'unknown')).toBe('unknown');
     expect(resolveBulkUpdateValue('done', true)).toBe(true);
+  });
+
+  it('resolveBulkWriteConcurrency defaults and clamps env overrides', () => {
+    const previous = process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+    try {
+      delete process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+      expect(resolveBulkWriteConcurrency(1)).toBe(1);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '';
+      expect(resolveBulkWriteConcurrency(2)).toBe(2);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = 'nope';
+      expect(resolveBulkWriteConcurrency(1)).toBe(1);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '0';
+      expect(resolveBulkWriteConcurrency(1)).toBe(1);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '3';
+      expect(resolveBulkWriteConcurrency(1)).toBe(3);
+
+      process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = '99';
+      expect(resolveBulkWriteConcurrency(1)).toBe(8);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+      } else {
+        process.env.VIKUNJA_BULK_WRITE_CONCURRENCY = previous;
+      }
+    }
   });
 
   const mockClient = {
@@ -267,6 +296,18 @@ describe('Bulk operations', () => {
         expect(markdown).toContain('Successfully updated 1 tasks, 1 failed');
         expect(markdown).toContain('**FailedCount**:');
         expect(markdown).not.toMatch(/Successfully updated 2 tasks"/);
+      });
+
+      it('should rethrow non-auth assignee errors during update', async () => {
+        mockClient.tasks.getTask.mockResolvedValue({ id: 1, title: 'Task 1', assignees: [] });
+        mockClient.tasks.updateTask.mockResolvedValue({ id: 1, title: 'Task 1' });
+        mockClient.tasks.assignUserToTask.mockRejectedValue(new Error('user missing'));
+        (isAuthenticationError as jest.Mock).mockReturnValue(false);
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => fn());
+
+        await expect(
+          bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [9] }),
+        ).rejects.toThrow('Bulk update failed');
       });
 
       it('should handle repeat_mode conversion on merge path', async () => {

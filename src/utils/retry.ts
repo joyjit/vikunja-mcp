@@ -165,7 +165,7 @@ export async function withRetry<T>(
   const breakerName =
     options.circuitBreakerName || `anonymous-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  for (let attempt = 0; attempt <= (opts.maxRetries || 3); attempt++) {
+  for (let attempt = 0; attempt <= (opts.maxRetries ?? 3); attempt++) {
     try {
       if (!enableCircuitBreaker) {
         return await operation();
@@ -179,7 +179,7 @@ export async function withRetry<T>(
         ? opts.shouldRetry(error as Error)
         : isRetryableError(error as Error);
 
-      if (attempt === (opts.maxRetries || 3) || !shouldRetry) {
+      if (attempt === (opts.maxRetries ?? 3) || !shouldRetry) {
         throw error;
       }
 
@@ -218,7 +218,29 @@ export function getHealthStats(breaker: CircuitBreaker): CircuitBreaker.Stats {
 }
 
 /**
- * Check if error is retryable (basic implementation)
+ * Best-effort HTTP status from Error-like objects (node-vikunja / fetch wrappers).
+ */
+function getHttpStatus(error: unknown): number | undefined {
+  if (error === null || typeof error !== 'object') {
+    return undefined;
+  }
+  const e = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+  };
+  const candidates = [e.statusCode, e.status, e.response?.status];
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if error is retryable (basic implementation).
+ * Includes transient Vikunja/SQLite write failures ("database is locked" → HTTP 500).
  */
 export function isRetryableError(error: unknown): error is ErrorWithCode {
   if (error instanceof Error) {
@@ -227,11 +249,19 @@ export function isRetryableError(error: unknown): error is ErrorWithCode {
       return true;
     }
 
+    const status = getHttpStatus(error);
+    if (status === 429 || (typeof status === 'number' && status >= 500 && status < 600)) {
+      return true;
+    }
+
     const message = error.message.toLowerCase();
     return message.includes('timeout') ||
            message.includes('connection') ||
            message.includes('network') ||
            message.includes('rate limit') ||
+           message.includes('internal server error') ||
+           message.includes('database is locked') ||
+           message.includes('sqlite_busy') ||
            (error as ErrorWithCode).code === 'ECONNRESET' ||
            (error as ErrorWithCode).code === 'ETIMEDOUT';
   }
@@ -243,6 +273,11 @@ export function isRetryableError(error: unknown): error is ErrorWithCode {
  */
 export function isTransientError(error: unknown): error is ErrorWithCode {
   if (error instanceof Error) {
+    const status = getHttpStatus(error);
+    if (status === 429 || (typeof status === 'number' && status >= 500 && status < 600)) {
+      return true;
+    }
+
     const message = error.message.toLowerCase();
     return message.includes('timeout') ||
            message.includes('timed out') ||
@@ -255,6 +290,9 @@ export function isTransientError(error: unknown): error is ErrorWithCode {
            message.includes('etimedout') ||
            message.includes('reset by peer') ||
            message.includes('closed unexpectedly') ||
+           message.includes('internal server error') ||
+           message.includes('database is locked') ||
+           message.includes('sqlite_busy') ||
            (error as ErrorWithCode).code === 'ECONNRESET' ||
            (error as ErrorWithCode).code === 'ETIMEDOUT';
   }
@@ -296,6 +334,17 @@ export const RETRY_CONFIG = {
     backoffFactor: 1.5,
     enableCircuitBreaker: true,
     circuitBreakerName: 'vikunja-bulk-operations'
+  },
+  /**
+   * Per-item bulk writes against SQLite-backed Vikunja.
+   * No shared circuit breaker: one locked write must not trip the rest of the batch.
+   */
+  BULK_WRITES: {
+    maxRetries: 3,
+    initialDelay: 200,
+    maxDelay: 5000,
+    backoffFactor: 2,
+    enableCircuitBreaker: false,
   }
 } as const;
 

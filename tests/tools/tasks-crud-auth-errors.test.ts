@@ -34,7 +34,9 @@ jest.mock('../../src/utils/retry', () => {
       AUTH_ERRORS: {
         maxRetries: 3,
       },
+      BULK_WRITES: actual.RETRY_CONFIG.BULK_WRITES,
     },
+    isRetryableError: actual.isRetryableError,
     // Labels/assignees use their own circuitBreakerName when withRetry is used.
     // sin estas constantes el mock parcial las dejaba en undefined y reventaba.
     CIRCUIT_BREAKER_NAMES: actual.CIRCUIT_BREAKER_NAMES,

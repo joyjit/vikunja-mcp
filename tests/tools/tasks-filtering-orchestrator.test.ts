@@ -27,10 +27,14 @@ jest.mock('../../src/utils/logger', () => ({
 }));
 
 // Mock the retry module
-jest.mock('../../src/utils/retry', () => ({
-  withRetry: jest.fn((fn) => fn()),
-  RETRY_CONFIG: {},
-}));
+jest.mock('../../src/utils/retry', () => {
+  const actual = jest.requireActual('../../src/utils/retry') as typeof import('../../src/utils/retry');
+  return {
+    withRetry: jest.fn((fn) => fn()),
+    RETRY_CONFIG: actual.RETRY_CONFIG,
+    isRetryableError: actual.isRetryableError,
+  };
+});
 
 // Mock the error handler
 jest.mock('../../src/utils/error-handler', () => ({

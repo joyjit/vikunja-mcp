@@ -3,9 +3,9 @@
  * Uses BulkOperationValidator + shared batch processor helpers.
  */
 
-import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logger, isAuthenticationError, RETRY_CONFIG, transformApiError, handleFetchError } from '../../index';
+import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logger, isAuthenticationError, transformApiError, handleFetchError } from '../../index';
 import type { Assignee } from '../../types';
-import { withRetry, isRetryableError } from '../../utils/retry';
+import { withRetry, isRetryableError, RETRY_CONFIG } from '../../utils/retry';
 import { addLabelsToTaskAdditive } from './labels';
 import { addAssigneesToTaskAdditive } from './assignees';
 import { BatchProcessor } from '../../utils/performance/batch-processor';
@@ -43,10 +43,19 @@ const processors = {
   create: new BatchProcessor({ maxConcurrency: writeConcurrency, batchSize: 15, enableMetrics: true, batchDelay: 0 }),
 };
 
-const bulkWriteRetry = {
-  ...RETRY_CONFIG.BULK_WRITES,
-  shouldRetry: isRetryableError,
-};
+/** Built at call time so partial test mocks of RETRY_CONFIG cannot crash module load. */
+function bulkWriteRetryOptions() {
+  return {
+    ...(RETRY_CONFIG.BULK_WRITES ?? {
+      maxRetries: 3,
+      initialDelay: 200,
+      maxDelay: 5000,
+      backoffFactor: 2,
+      enableCircuitBreaker: false,
+    }),
+    shouldRetry: isRetryableError,
+  };
+}
 
 // ==================== VALIDATION WRAPPERS ====================
 
@@ -110,7 +119,7 @@ export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: 
 
       const updated = await withRetry(
         () => client.tasks.updateTask(taskId, update),
-        bulkWriteRetry,
+        bulkWriteRetryOptions(),
       );
 
       if (args.field === 'assignees' && Array.isArray(args.value)) {
@@ -193,7 +202,7 @@ export async function bulkDeleteTasks(args: BulkDeleteArgs): Promise<{ content: 
 
     const fetchResult = await processors.delete.processBatches(taskIds, async (id) => await client.tasks.getTask(id));
     const deletionResult = await processors.delete.processBatches(taskIds, async (id) => {
-      await withRetry(() => client.tasks.deleteTask(id), bulkWriteRetry);
+      await withRetry(() => client.tasks.deleteTask(id), bulkWriteRetryOptions());
       return { taskId: id, deleted: true };
     });
 
@@ -250,7 +259,7 @@ export async function bulkCreateTasks(args: BulkCreateArgs): Promise<{ content: 
 
         const created = await withRetry(
           () => client.tasks.createTask(projectId, newTask),
-          bulkWriteRetry,
+          bulkWriteRetryOptions(),
         );
         if (!created.id) return created;
 

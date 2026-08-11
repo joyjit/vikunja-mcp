@@ -165,7 +165,7 @@ export async function withRetry<T>(
   const breakerName =
     options.circuitBreakerName || `anonymous-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  for (let attempt = 0; attempt <= (opts.maxRetries || 3); attempt++) {
+  for (let attempt = 0; attempt <= (opts.maxRetries ?? 3); attempt++) {
     try {
       if (!enableCircuitBreaker) {
         return await operation();
@@ -179,7 +179,7 @@ export async function withRetry<T>(
         ? opts.shouldRetry(error as Error)
         : isRetryableError(error as Error);
 
-      if (attempt === (opts.maxRetries || 3) || !shouldRetry) {
+      if (attempt === (opts.maxRetries ?? 3) || !shouldRetry) {
         throw error;
       }
 

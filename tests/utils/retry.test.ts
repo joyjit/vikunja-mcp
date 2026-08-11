@@ -203,6 +203,17 @@ describe('retry utility', () => {
       
       await expect(promise).rejects.toThrow('Error');
     });
+
+    it('should not retry when maxRetries is 0', async () => {
+      const error = new Error('Internal Server Error');
+      (error as Error & { status: number }).status = 500;
+      const operation = jest.fn().mockRejectedValue(error);
+
+      await expect(
+        withRetry(operation, { ...noBreaker, maxRetries: 0 }),
+      ).rejects.toThrow('Internal Server Error');
+      expect(operation).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('isTransientError', () => {

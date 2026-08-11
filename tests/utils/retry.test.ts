@@ -1,4 +1,4 @@
-import { withRetry, isTransientError, RETRY_CONFIG, circuitBreakerRegistry } from '../../src/utils/retry';
+import { withRetry, isTransientError, isRetryableError, RETRY_CONFIG, circuitBreakerRegistry } from '../../src/utils/retry';
 import { isAuthenticationError } from '../../src/utils/auth-error-handler';
 import { logger } from '../../src/utils/logger';
 
@@ -227,6 +227,14 @@ describe('retry utility', () => {
       expect(isTransientError(new Error('Unable to connect to network'))).toBe(true);
     });
 
+    it('should identify SQLite lock and HTTP 5xx as transient', () => {
+      expect(isTransientError(new Error('database is locked'))).toBe(true);
+      expect(isTransientError(new Error('Internal Server Error'))).toBe(true);
+      const statusError = new Error('server boom');
+      (statusError as Error & { statusCode: number }).statusCode = 503;
+      expect(isTransientError(statusError)).toBe(true);
+    });
+
     it('should not identify non-transient errors', () => {
       expect(isTransientError(new Error('Invalid input'))).toBe(false);
       expect(isTransientError(new Error('Authentication failed'))).toBe(false);
@@ -244,6 +252,48 @@ describe('retry utility', () => {
       expect(isTransientError(new Error('TIMEOUT'))).toBe(true);
       expect(isTransientError(new Error('Network Error'))).toBe(true);
       expect(isTransientError(new Error('SOCKET HANG UP'))).toBe(true);
+    });
+  });
+
+  describe('isRetryableError', () => {
+    it('should retry Internal Server Error and SQLite lock messages', () => {
+      expect(isRetryableError(new Error('Internal Server Error'))).toBe(true);
+      expect(isRetryableError(new Error('database is locked'))).toBe(true);
+      expect(isRetryableError(new Error('SQLITE_BUSY: database is locked'))).toBe(true);
+    });
+
+    it('should retry HTTP 5xx and 429 via status fields', () => {
+      const locked = new Error('write failed');
+      (locked as Error & { status: number }).status = 500;
+      expect(isRetryableError(locked)).toBe(true);
+
+      const rateLimited = new Error('slow down');
+      (rateLimited as Error & { statusCode: number }).statusCode = 429;
+      expect(isRetryableError(rateLimited)).toBe(true);
+
+      const nested = new Error('upstream');
+      (nested as Error & { response: { status: number } }).response = { status: 502 };
+      expect(isRetryableError(nested)).toBe(true);
+    });
+
+    it('should not retry client validation errors', () => {
+      expect(isRetryableError(new Error('Invalid input'))).toBe(false);
+      const notFound = new Error('missing');
+      (notFound as Error & { statusCode: number }).statusCode = 404;
+      expect(isRetryableError(notFound)).toBe(false);
+    });
+
+    it('should retry when withRetry sees a lock error then succeeds', async () => {
+      const lockError = new Error('Internal Server Error');
+      (lockError as Error & { status: number }).status = 500;
+      const operation = jest.fn()
+        .mockRejectedValueOnce(lockError)
+        .mockResolvedValueOnce('created');
+
+      const promise = withRetry(operation, { ...noBreaker, initialDelay: 100 });
+      await jest.advanceTimersByTimeAsync(100);
+      await expect(promise).resolves.toBe('created');
+      expect(operation).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -267,6 +317,16 @@ describe('retry utility', () => {
         backoffFactor: 1.5,
         enableCircuitBreaker: true,
         circuitBreakerName: 'vikunja-api-operations'
+      });
+    });
+
+    it('should have BULK_WRITES configuration without a shared breaker', () => {
+      expect(RETRY_CONFIG.BULK_WRITES).toEqual({
+        maxRetries: 3,
+        initialDelay: 200,
+        maxDelay: 5000,
+        backoffFactor: 2,
+        enableCircuitBreaker: false,
       });
     });
   });

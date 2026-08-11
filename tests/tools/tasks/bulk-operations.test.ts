@@ -230,33 +230,43 @@ describe('Bulk operations', () => {
             done: false,
           },
         ];
-        mockClient.tasks.getTask.mockImplementation(async (id: number) => {
-          const task = tasks.find((t) => t.id === id);
-          if (!task) throw new Error(`missing ${id}`);
-          return { ...task };
-        });
-        mockClient.tasks.updateTask.mockImplementation(async (_id: number, payload: Record<string, unknown>) => payload);
+        mockClient.tasks.getTask.mockImplementation((id: number) =>
+          Promise.resolve(tasks.find((t) => t.id === id)),
+        );
+        mockClient.tasks.updateTask.mockImplementation((id: number, body: Record<string, unknown>) =>
+          Promise.resolve({ ...tasks.find((t) => t.id === id), ...body }),
+        );
 
-        await bulkUpdateTasks({ taskIds: [10, 11], field: 'done', value: true });
+        const result = await bulkUpdateTasks({ taskIds: [10, 11], field: 'done', value: true });
 
-        expect(mockClient.tasks.bulkUpdateTasks).not.toHaveBeenCalled();
-        expect(mockClient.tasks.updateTask).toHaveBeenCalledTimes(2);
         expect(mockClient.tasks.updateTask).toHaveBeenCalledWith(
           10,
-          expect.objectContaining({
-            description: 'notes for A',
-            priority: 3,
-            done: true,
-          }),
+          expect.objectContaining({ description: 'notes for A', priority: 3, done: true }),
         );
         expect(mockClient.tasks.updateTask).toHaveBeenCalledWith(
           11,
-          expect.objectContaining({
-            description: 'notes for B',
-            priority: 5,
-            done: true,
-          }),
+          expect.objectContaining({ description: 'notes for B', priority: 5, done: true }),
         );
+        expect(result.content[0].text).toContain('Successfully updated 2 tasks');
+      });
+
+      it('should report partial failure instead of fake full success (issue #79)', async () => {
+        mockClient.tasks.getTask
+          .mockResolvedValueOnce({ id: 1, title: 'ok', project_id: 1, done: false })
+          .mockResolvedValueOnce({ id: 2, title: 'fail', project_id: 1, done: false });
+        mockClient.tasks.updateTask
+          .mockResolvedValueOnce({ id: 1, title: 'ok', project_id: 1, done: true })
+          .mockRejectedValueOnce(new Error('Internal Server Error'));
+
+        const result = await bulkUpdateTasks({ taskIds: [1, 2], field: 'done', value: true });
+        const markdown = result.content[0].text;
+        const parsed = parseMarkdown(markdown);
+
+        expect(parsed.hasHeading(2, /Error/)).toBe(true);
+        expect(markdown).toContain('Bulk update partially completed');
+        expect(markdown).toContain('Successfully updated 1 tasks, 1 failed');
+        expect(markdown).toContain('**FailedCount**:');
+        expect(markdown).not.toMatch(/Successfully updated 2 tasks"/);
       });
 
       it('should handle repeat_mode conversion on merge path', async () => {
@@ -304,7 +314,15 @@ describe('Bulk operations', () => {
 
         mockClient.tasks.getTask.mockResolvedValue({ id: 1, title: 'Task 1', assignees: [] });
         mockClient.tasks.updateTask.mockResolvedValue({ id: 1, title: 'Task 1' });
-        (withRetry as jest.Mock).mockRejectedValue(authError);
+        // First withRetry is the task write; later calls cover assignee work.
+        let retryCalls = 0;
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => {
+          retryCalls += 1;
+          if (retryCalls === 1) {
+            return fn();
+          }
+          return Promise.reject(authError);
+        });
         (isAuthenticationError as jest.Mock).mockReturnValue(true);
 
         await expect(bulkUpdateTasks({ taskIds: [1], field: 'assignees', value: [1] })).rejects.toThrow(
@@ -553,7 +571,14 @@ describe('Bulk operations', () => {
         const authError = new Error('Authentication failed');
         
         mockClient.tasks.createTask.mockResolvedValue(mockTask);
-        (withRetry as jest.Mock).mockRejectedValue(authError);
+        let retryCalls = 0;
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => {
+          retryCalls += 1;
+          if (retryCalls === 1) {
+            return fn();
+          }
+          return Promise.reject(authError);
+        });
         (isAuthenticationError as jest.Mock).mockReturnValue(true);
         mockClient.tasks.deleteTask.mockResolvedValue({});
 
@@ -648,7 +673,14 @@ describe('Bulk operations', () => {
         const deleteError = new Error('Cleanup failed');
         
         mockClient.tasks.createTask.mockResolvedValue(mockTask);
-        (withRetry as jest.Mock).mockRejectedValue(labelError);
+        let retryCalls = 0;
+        (withRetry as jest.Mock).mockImplementation((fn: () => Promise<unknown>) => {
+          retryCalls += 1;
+          if (retryCalls === 1) {
+            return fn();
+          }
+          return Promise.reject(labelError);
+        });
         mockClient.tasks.deleteTask.mockRejectedValue(deleteError);
 
         await expect(bulkCreateTasks({ 

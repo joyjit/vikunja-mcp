@@ -5,7 +5,7 @@
 
 import { MCPError, ErrorCode, createStandardResponse, getClientFromContext, logger, isAuthenticationError, RETRY_CONFIG, transformApiError, handleFetchError } from '../../index';
 import type { Assignee } from '../../types';
-import { withRetry } from '../../utils/retry';
+import { withRetry, isRetryableError } from '../../utils/retry';
 import { addLabelsToTaskAdditive } from './labels';
 import { addAssigneesToTaskAdditive } from './assignees';
 import { BatchProcessor } from '../../utils/performance/batch-processor';
@@ -18,10 +18,34 @@ import type { BulkUpdateArgs, BulkDeleteArgs, BulkCreateArgs, BulkCreateTaskData
 
 // ==================== BATCH PROCESSORS ====================
 
+/**
+ * SQLite (Vikunja's default DB) serializes writers. Parallel bulk writes hit
+ * "database is locked" → HTTP 500. Default to one write at a time; override with
+ * VIKUNJA_BULK_WRITE_CONCURRENCY when the backend can take more (e.g. Postgres).
+ */
+function resolveBulkWriteConcurrency(fallback = 1): number {
+  const raw = process.env.VIKUNJA_BULK_WRITE_CONCURRENCY;
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.min(parsed, 8);
+}
+
+const writeConcurrency = resolveBulkWriteConcurrency(1);
+
 const processors = {
-  update: new BatchProcessor({ maxConcurrency: 5, batchSize: 10, enableMetrics: true, batchDelay: 0 }),
-  delete: new BatchProcessor({ maxConcurrency: 3, batchSize: 5, enableMetrics: true, batchDelay: 100 }),
-  create: new BatchProcessor({ maxConcurrency: 8, batchSize: 15, enableMetrics: true, batchDelay: 0 }),
+  update: new BatchProcessor({ maxConcurrency: writeConcurrency, batchSize: 10, enableMetrics: true, batchDelay: 0 }),
+  delete: new BatchProcessor({ maxConcurrency: writeConcurrency, batchSize: 5, enableMetrics: true, batchDelay: 100 }),
+  create: new BatchProcessor({ maxConcurrency: writeConcurrency, batchSize: 15, enableMetrics: true, batchDelay: 0 }),
+};
+
+const bulkWriteRetry = {
+  ...RETRY_CONFIG.BULK_WRITES,
+  shouldRetry: isRetryableError,
 };
 
 // ==================== VALIDATION WRAPPERS ====================
@@ -84,7 +108,10 @@ export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: 
       // Spread current task so fields not being changed survive Vikunja's full replace
       const update = applyFieldUpdate({ ...current }, args.field, fieldValue);
 
-      const updated = await client.tasks.updateTask(taskId, update);
+      const updated = await withRetry(
+        () => client.tasks.updateTask(taskId, update),
+        bulkWriteRetry,
+      );
 
       if (args.field === 'assignees' && Array.isArray(args.value)) {
         const desired = args.value as number[];
@@ -122,8 +149,28 @@ export async function bulkUpdateTasks(args: BulkUpdateArgs): Promise<{ content: 
       if (firstError instanceof MCPError && firstError.message.includes('authentication')) throw firstError;
       throw new MCPError(ErrorCode.API_ERROR, `Bulk update failed. Could not update any tasks. Failed IDs: ${updateResult.failed.map(f => f.originalItem).join(', ')}`);
     }
-    return successResponse('update-task', `Successfully updated ${taskIds.length} tasks`, updateResult.successful, {
-      count: taskIds.length, affectedFields: [args.field], performanceMetrics: {
+    if (updateResult.failed.length > 0) {
+      const failedIds = updateResult.failed.map(f => f.originalItem);
+      return successResponse(
+        'update-task',
+        `Bulk update partially completed. Successfully updated ${updateResult.successful.length} tasks, ${updateResult.failed.length} failed.`,
+        updateResult.successful,
+        {
+          count: updateResult.successful.length,
+          failedCount: updateResult.failed.length,
+          failedIds,
+          affectedFields: [args.field],
+          success: false,
+          performanceMetrics: {
+            totalDuration: updateResult.metrics.totalDuration,
+            operationsPerSecond: updateResult.metrics.operationsPerSecond,
+            apiCallsUsed: updateResult.metrics.successfulOperations + updateResult.metrics.failedOperations,
+          },
+        },
+      );
+    }
+    return successResponse('update-task', `Successfully updated ${updateResult.successful.length} tasks`, updateResult.successful, {
+      count: updateResult.successful.length, affectedFields: [args.field], performanceMetrics: {
         totalDuration: updateResult.metrics.totalDuration, operationsPerSecond: updateResult.metrics.operationsPerSecond,
         apiCallsUsed: updateResult.metrics.successfulOperations + updateResult.metrics.failedOperations,
       },
@@ -145,7 +192,10 @@ export async function bulkDeleteTasks(args: BulkDeleteArgs): Promise<{ content: 
     const client = await getClientFromContext();
 
     const fetchResult = await processors.delete.processBatches(taskIds, async (id) => await client.tasks.getTask(id));
-    const deletionResult = await processors.delete.processBatches(taskIds, async (id) => { await client.tasks.deleteTask(id); return { taskId: id, deleted: true }; });
+    const deletionResult = await processors.delete.processBatches(taskIds, async (id) => {
+      await withRetry(() => client.tasks.deleteTask(id), bulkWriteRetry);
+      return { taskId: id, deleted: true };
+    });
 
     if (deletionResult.failed.length > 0) {
       const failedIds = deletionResult.failed.map(f => f.originalItem);
@@ -198,7 +248,10 @@ export async function bulkCreateTasks(args: BulkCreateArgs): Promise<{ content: 
           if (rc.repeat_mode !== undefined) (newTask as Record<string, unknown>).repeat_mode = rc.repeat_mode;
         }
 
-        const created = await client.tasks.createTask(projectId, newTask);
+        const created = await withRetry(
+          () => client.tasks.createTask(projectId, newTask),
+          bulkWriteRetry,
+        );
         if (!created.id) return created;
 
         // Narrow type - id is guaranteed to exist after early return

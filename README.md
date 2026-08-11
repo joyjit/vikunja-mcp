@@ -11,6 +11,12 @@ Upstream is slow to merge and release. This fork ships Vikunja **2.3**-ready fix
 - **bulk-update** preserves fields it was not asked to change
 - **Task `projectId` update** actually moves the task; labels apply on create
 - **Project partial update** keeps title / parent instead of wiping them
+- **Assignees stick**: create/assign use per-user APIs and verify persistence (Vikunja’s bulk assign body is ignored)
+- **Labels stick**: set labels via additive `PUT` (Vikunja’s bulk labels route clears labels when given the wrong body shape)
+- **`percentDone`**: create / update / bulk can set completion percentage (0–100)
+- **Filtered lists paginate correctly**: `done` / `filter` go to the server before paging (with client-side fallback)
+- **Bulk writes vs SQLite**: default one write at a time, retry lock/5xx; raise with `VIKUNJA_BULK_WRITE_CONCURRENCY` on Postgres
+- **Vikunja 2.x**: `getAllTasks` uses `GET /tasks`; list responses include all items (no silent drop after 10)
 - **Node.js 24** + Dockerized MCP integration CI against Vikunja 2.3
 
 A Model Context Protocol (MCP) server that enables AI assistants to interact with Vikunja task management instances. This fork treats the server as a **thin Vikunja API wrapper**: tool args are validated for shape (IDs, dates, enums), credentials are masked in logs, and DoS limits still apply — but **content policy for titles/descriptions belongs to Vikunja**, not a regex reject list in this process.
@@ -22,7 +28,7 @@ A Model Context Protocol (MCP) server that enables AI assistants to interact wit
 - **Full task management** operations implemented
 - **Complete project management** with CRUD operations
 - **Label management** for organizing tasks
-- **Team operations** for collaboration (get/update/members limited by API)
+- **Team operations** for collaboration (list/create/get/update/delete/members)
 - **User management** with settings and search
 - **Webhook management** for project automation
 - **Batch import** tasks from CSV or JSON files
@@ -88,7 +94,7 @@ All improvements maintain **100% backward compatibility** with existing implemen
 
 Requires **Node.js 24+**. Use an API token (`tk_…`) or JWT from your Vikunja instance.
 
-Pin a version if you want: `"args": ["-y", "@joyjit/vikunja-mcp@0.3.1"]`.
+Pin a version if you want (example): `"args": ["-y", "@joyjit/vikunja-mcp@0.3.1"]`.
 
 ### Option 2: Install from GitHub (no npm needed)
 
@@ -297,8 +303,9 @@ vikunja_tasks.create({
   description: "Update README with examples",
   dueDate: "2024-12-31T23:59:59Z",
   priority: 3,
-  labels: [1, 2],      // Label IDs
-  assignees: [1, 3]    // User IDs
+  percentDone: 25,   // 0–100 (Vikunja percent_done)
+  labels: [1, 2],      // Label IDs (added; does not clear existing)
+  assignees: [1, 3]    // User IDs (verified after assign)
 })
 
 // Create a recurring task (repeats every week)
@@ -326,7 +333,8 @@ vikunja_tasks.get({ id: 123 })
 vikunja_tasks.update({
   id: 123,
   done: true,
-  priority: 5
+  priority: 5,
+  percentDone: 100
 })
 
 // Move a task to another project (full-model merge; verified after update)
@@ -467,7 +475,13 @@ vikunja_tasks.bulk-update({
 vikunja_tasks.bulk-update({
   taskIds: [123, 124, 125],
   field: "labels",
-  value: [1, 3, 5]       // Set same labels on all tasks
+  value: [1, 3, 5]       // Adds these labels (does not clear others)
+})
+
+vikunja_tasks.bulk-update({
+  taskIds: [123, 124, 125],
+  field: "percent_done",
+  value: 50
 })
 
 // Bulk delete multiple tasks (max 100)
@@ -742,6 +756,8 @@ vikunja_labels.update({
 vikunja_labels.delete({ id: 1 })
 
 // --- Label Assignment to Tasks ---
+// Labels are ADDED (missing only). Already-present labels are a no-op.
+// Passing an empty list does not clear labels.
 
 // Apply multiple labels to a task
 vikunja_tasks.apply-label({
@@ -785,11 +801,23 @@ vikunja_teams.create({
   description: "Responsible for UI/UX development"
 })
 
+// Get a team by ID (direct API; not in node-vikunja)
+vikunja_teams.get({ id: 1 })
+
+// Update a team
+vikunja_teams.update({
+  id: 1,
+  name: "Frontend & Design",
+  description: "UI/UX and design systems"
+})
+
+// List / add / remove / update members
+vikunja_teams.members({ id: 1, memberSubcommand: "list" })
+vikunja_teams.members({ id: 1, memberSubcommand: "add", userId: 42 })
+vikunja_teams.members({ id: 1, memberSubcommand: "remove", userId: 42 })
+
 // Delete a team
 vikunja_teams.delete({ id: 1 })
-
-// Note: get, update, and members operations are not yet
-// implemented in the node-vikunja library
 ```
 
 ### User Management Examples
@@ -1049,27 +1077,35 @@ This standardized format ensures:
   - `list` - List tasks with filters
     - Filter by project or get all tasks
     - Support for pagination, search, sorting
-    - Filter by completion status
+    - Filter by completion status (`done` is folded into the server filter when possible)
     - Apply saved filters with `filterId` parameter
+    - Hybrid filtering: tries server-side first, falls back to client-side
   - `create` - Create a new task
     - Required: title, projectId
-    - Optional: description, dueDate, priority, labels, assignees
+    - Optional: description, dueDate, priority, percentDone (0–100), labels, assignees
+    - Labels are applied additively after create; assignees use per-user assign + verify
     - Validates date format (ISO 8601) and IDs
   - `get` - Get task details by ID
   - `update` - Update existing task
     - Supports partial updates (GET + merge before POST — Vikunja replaces the full model)
-    - Can update title, description, dueDate, priority, done status
+    - Can update title, description, dueDate, priority, percentDone, done status
     - Can move tasks between projects with `projectId` (verified after update)
-    - Can update labels and assignees (uses efficient diff-based approach)
+    - Can update labels (additive) and assignees (diff-based per-user APIs)
   - `delete` - Delete a task by ID
   - `assign` - Bulk assign users to tasks
   - `unassign` - Remove users from tasks
   - `comment` - List or add comments to tasks
+  - `bulk-create` - Create multiple tasks at once
+    - Required: projectId, tasks array (max 100)
+    - Per task: title required; optional description, dueDate, priority, percentDone, labels, assignees, repeat
+    - Default write concurrency is 1 (SQLite-safe); override with `VIKUNJA_BULK_WRITE_CONCURRENCY`
+    - Retries transient lock / 5xx errors per item
   - `bulk-update` - Update multiple tasks at once
     - Required: taskIds array, field name, value
-    - Supported fields: done, priority, due_date, project_id, assignees, labels
+    - Supported fields: done, priority, due_date, percent_done, project_id, assignees, labels
     - Validates field types and values
     - Uses per-task fetch+merge+update (does not call Vikunja's native bulk API, which can wipe omitted fields — see #46)
+    - Same SQLite-safe concurrency / retry behavior as bulk-create
     - ⚠️ Performance: O(n) get+update calls (n = number of tasks)
   - `bulk-delete` - Delete multiple tasks at once
     - Required: taskIds array
@@ -1146,7 +1182,7 @@ This standardized format ensures:
   - `delete` - Delete a label by ID
   - `apply-label` - Apply one or more labels to a task
     - Required: task id, labels array
-    - Supports bulk label application
+    - Additive: adds missing labels; already-present labels are ignored (no abort)
   - `remove-label` - Remove one or more labels from a task
     - Required: task id, labels array
     - Supports bulk label removal
@@ -1177,16 +1213,18 @@ This standardized format ensures:
     - Creates all tasks with labels from template
 
 ### Team Management ✅
-- `vikunja_teams` - Team operations (partially implemented)
+- `vikunja_teams` - Team operations (fully implemented; get/update/members use direct API calls where node-vikunja is incomplete)
   - `list` - List all teams with filters
     - Support for pagination and search
   - `create` - Create new team
     - Required: name
     - Optional: description
+  - `get` - Get team by ID
+  - `update` - Update team name / description
   - `delete` - Delete a team by ID (with fallback API support)
-  - `get` - Not yet implemented in node-vikunja
-  - `update` - Not yet implemented in node-vikunja
-  - `members` - Not yet implemented in node-vikunja
+  - `members` - Manage membership
+    - `memberSubcommand`: `list` (default), `add`, `remove`, `update`
+    - `userId` required for add/remove/update; `admin` optional (required for update)
 
 ### User Management ✅
 - `vikunja_users` - User operations (fully implemented) **[Requires JWT authentication]**
@@ -1271,17 +1309,10 @@ This standardized format ensures:
 ## Known Limitations
 
 1. **File Attachments**: The `attach` subcommand is not implemented due to MCP protocol limitations
-2. **Team Operations**: Limited functionality due to incomplete node-vikunja API support:
-   - Cannot get team by ID
-   - Cannot update team information
-   - Cannot delete teams
-   - Cannot manage team members
+2. **Label replace / clear**: Label writes are **additive** (add missing labels). Passing `labels: []` does not clear existing labels; there is no first-class “replace all labels” helper yet
 3. **Pagination**: Some endpoints may not fully support pagination parameters due to API limitations
 4. **Authentication Issues**: Some Vikunja API endpoints have known authentication issues:
    - **User endpoints**: May fail with token errors even with valid tokens (known Vikunja API limitation)
-   - **Bulk operations**: May have authentication issues with certain Vikunja API versions
-   - **Label operations**: May fail with authentication errors on some server configurations
-   - **Assignee operations**: May fail with authentication errors when creating/updating tasks with assignees
    - The server provides detailed error messages when these issues occur, suggesting workarounds
 
 ## Security & Performance Features
@@ -1324,6 +1355,10 @@ DEBUG=true
 
 # Set log level (error, warn, info, debug)
 LOG_LEVEL=debug
+
+# Bulk create/update write concurrency (default: 1 — safe for SQLite)
+# Raise only if Vikunja uses a DB that tolerates parallel writers (e.g. Postgres)
+VIKUNJA_BULK_WRITE_CONCURRENCY=1
 ```
 
 #### Security & Performance Configuration
@@ -1365,9 +1400,9 @@ For detailed rate limiting configuration, see [`docs/RATE_LIMITING.md`](docs/RAT
 - [x] ✅ **Test coverage** - 98.91% function coverage achieved
 - [x] ✅ **Architecture simplification** - 90% code reduction with enhanced maintainability
 - [x] ✅ **Production-ready resilience** - Opossum circuit breaker and Zod validation
+- [x] ✅ **Integration tests** - Dockerized MCP tests against Vikunja 2.3 (`npm run test:mcp`)
 - [ ] Add webhook subscriptions for real-time updates
 - [ ] Add caching for frequently accessed data
-- [ ] Add integration tests with real Vikunja instance
 - [ ] Implement persistent storage for saved filters (optional - in-memory works well)
 
 ## Contributing

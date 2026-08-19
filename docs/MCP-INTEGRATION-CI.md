@@ -5,7 +5,7 @@ Live tests against a **real Vikunja** in ephemeral Docker. Unit/coverage CI
 
 ## Pattern (same idea as mini-mealie’s Mealie E2E)
 
-1. `docker/vikunja.e2e.yml` — pinned Vikunja (`2.3.0`), SQLite on tmpfs.
+1. `docker/vikunja.e2e.yml` — pinned Vikunja (`2.5.0`), SQLite on tmpfs.
 2. `scripts/vikunja-docker.ts` — `up` / `down`: wait for health, register a
    user, mint a JWT via login, write `.env.e2e` (**no secrets**).
 3. `scripts/test-mcp.ts` — loads `.env.e2e` if present; runs the suite.
@@ -45,7 +45,7 @@ npm run test:mcp:run
 | Var | Default | Purpose |
 | --- | --- | --- |
 | `VIKUNJA_URL` / `VIKUNJA_API_TOKEN` | from `.env.e2e` | Target instance |
-| `VIKUNJA_IMAGE` | `vikunja/vikunja:2.3.0` | Docker image (pin for a stable gate) |
+| `VIKUNJA_IMAGE` | `vikunja/vikunja:2.5.0` | Docker image (pin for a stable gate) |
 | `VIKUNJA_PORT` | `3456` | Host port for the container |
 
 ## CI notes
@@ -59,7 +59,7 @@ npm run test:mcp:run
 | | PR gate | Canary |
 | --- | --- | --- |
 | Workflow | `mcp-integration.yml` | `mcp-canary.yml` |
-| Image | `vikunja/vikunja:2.3.0` (pin) | `vikunja/vikunja:latest` |
+| Image | `vikunja/vikunja:2.5.0` (pin) | `vikunja/vikunja:latest` |
 | When | every PR / push to main·develop | Mondays 06:00 UTC + `workflow_dispatch` |
 | Blocks merges? | yes | no |
 

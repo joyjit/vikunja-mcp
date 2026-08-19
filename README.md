@@ -17,7 +17,7 @@ Upstream is slow to merge and release. This fork ships Vikunja **2.3**-ready fix
 - **Filtered lists paginate correctly**: `done` / `filter` go to the server before paging (with client-side fallback)
 - **Bulk writes vs SQLite**: default one write at a time, retry lock/5xx; raise with `VIKUNJA_BULK_WRITE_CONCURRENCY` on Postgres
 - **Vikunja 2.x**: `getAllTasks` uses `GET /tasks`; list responses include all items (no silent drop after 10)
-- **Node.js 24** + Dockerized MCP integration CI against Vikunja 2.3
+- **Node.js 24** + Dockerized MCP integration CI against Vikunja 2.5
 
 A Model Context Protocol (MCP) server that enables AI assistants to interact with Vikunja task management instances. This fork treats the server as a **thin Vikunja API wrapper**: tool args are validated for shape (IDs, dates, enums), credentials are masked in logs, and DoS limits still apply — but **content policy for titles/descriptions belongs to Vikunja**, not a regex reject list in this process.
 
@@ -1400,7 +1400,7 @@ For detailed rate limiting configuration, see [`docs/RATE_LIMITING.md`](docs/RAT
 - [x] ✅ **Test coverage** - 98.91% function coverage achieved
 - [x] ✅ **Architecture simplification** - 90% code reduction with enhanced maintainability
 - [x] ✅ **Production-ready resilience** - Opossum circuit breaker and Zod validation
-- [x] ✅ **Integration tests** - Dockerized MCP tests against Vikunja 2.3 (`npm run test:mcp`)
+- [x] ✅ **Integration tests** - Dockerized MCP tests against Vikunja 2.5 (`npm run test:mcp`)
 - [ ] Add webhook subscriptions for real-time updates
 - [ ] Add caching for frequently accessed data
 - [ ] Implement persistent storage for saved filters (optional - in-memory works well)

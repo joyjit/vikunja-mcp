@@ -7,7 +7,7 @@
 # No default user — scripts/vikunja-docker.ts registers one and mints a JWT.
 services:
   vikunja:
-    image: ${VIKUNJA_IMAGE:-vikunja/vikunja:2.3.0}
+    image: ${VIKUNJA_IMAGE:-vikunja/vikunja:2.5.0}
     container_name: vikunja-mcp-e2e
     ports:
       - '${VIKUNJA_PORT:-3456}:3456'

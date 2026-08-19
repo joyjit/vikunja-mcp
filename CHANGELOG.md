@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Platform
+
+- Pin MCP integration CI to Vikunja 2.5.0 (canary already green on `latest`)
+
 ## 0.3.2 — 2026-08-11
 
 ### Fixes

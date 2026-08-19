@@ -5,6 +5,7 @@
 ### Platform
 
 - Pin MCP integration CI to Vikunja 2.5.0 (canary already green on `latest`)
+- Describe the fork as Vikunja 2.5-ready (README, npm, MCP registry blurb)
 
 ## 0.3.2 — 2026-08-11
 

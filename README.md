@@ -2,7 +2,7 @@
 
 Maintained **fork** of [`democratize-technology/vikunja-mcp`](https://github.com/democratize-technology/vikunja-mcp), published as [`@joyjit/vikunja-mcp`](https://www.npmjs.com/package/@joyjit/vikunja-mcp).
 
-Upstream is slow to merge and release. This fork ships Vikunja **2.3**-ready fixes on a faster cadence while still sending PRs upstream. Prefer upstream once equivalent fixes are released there.
+Upstream is slow to merge and release. This fork ships Vikunja **2.5**-ready fixes on a faster cadence while still sending PRs upstream. Prefer upstream once equivalent fixes are released there.
 
 ### Fork highlights (vs upstream npm `0.2.0`)
 

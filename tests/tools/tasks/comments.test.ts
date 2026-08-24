@@ -46,21 +46,13 @@ describe('Comment operations', () => {
       expect(markdown).toContain('Comment added successfully');
     });
 
-    it('should list comments when comment text is missing', async () => {
-      const mockComments = [
-        { id: 1, comment: 'First comment', created: '2024-01-01' },
-      ];
-      mockClient.tasks.getTaskComments.mockResolvedValue(mockComments);
+    it('should throw when comment text is missing (no silent list fallback)', async () => {
+      await expect(handleComment({ id: 123 })).rejects.toThrow(
+        'Failed to handle comment: comment text is required for the comment operation'
+      );
 
-      const result = await handleComment({ id: 123 });
-
-      expect(mockClient.tasks.getTaskComments).toHaveBeenCalledWith(123);
-
-      const markdown = result.content[0].text;
-      const parsed = parseMarkdown(markdown);
-      expect(markdown).toContain("## ✅ Success");
-      expect(markdown).toContain('list');
-      expect(markdown).toContain('Found 1 comments');
+      // Must NOT silently fall through to listing comments
+      expect(mockClient.tasks.getTaskComments).not.toHaveBeenCalled();
     });
 
     it('should throw error when id is missing', async () => {
@@ -91,31 +83,26 @@ describe('Comment operations', () => {
       );
     });
 
-    it('should handle API errors when listing comments', async () => {
-      mockClient.tasks.getTaskComments.mockRejectedValue(new Error('API Error'));
-
-      await expect(handleComment({ id: 123 })).rejects.toThrow(
-        'Failed to handle comment: API Error'
+    it('should throw when an empty string is provided (no silent list fallback)', async () => {
+      await expect(
+        handleComment({ id: 123, comment: '' })
+      ).rejects.toThrow(
+        'Failed to handle comment: comment text is required for the comment operation'
       );
+
+      expect(mockClient.tasks.getTaskComments).not.toHaveBeenCalled();
+      expect(mockClient.tasks.createTaskComment).not.toHaveBeenCalled();
     });
 
-    it('should list comments when empty string is provided', async () => {
-      // Empty string is falsy, so it lists comments instead
-      const mockComments = [];
-      mockClient.tasks.getTaskComments.mockResolvedValue(mockComments);
+    it('should throw when only whitespace is provided (no silent list fallback)', async () => {
+      await expect(
+        handleComment({ id: 123, comment: '   ' })
+      ).rejects.toThrow(
+        'Failed to handle comment: comment text is required for the comment operation'
+      );
 
-      const result = await handleComment({
-        id: 123,
-        comment: '',
-      });
-
-      expect(mockClient.tasks.getTaskComments).toHaveBeenCalledWith(123);
-
-      const markdown = result.content[0].text;
-      const parsed = parseMarkdown(markdown);
-      expect(markdown).toContain("## ✅ Success");
-      expect(markdown).toContain('list');
-      expect(markdown).toContain('Found 0 comments');
+      expect(mockClient.tasks.getTaskComments).not.toHaveBeenCalled();
+      expect(mockClient.tasks.createTaskComment).not.toHaveBeenCalled();
     });
   });
 

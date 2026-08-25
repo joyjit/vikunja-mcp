@@ -16,6 +16,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc",
+    "postbuild": "./scripts/smoke-dist.sh",
     "test": "jest --silent",
     "test:watch": "jest --watch --silent",
     "test:coverage": "jest --coverage --silent",

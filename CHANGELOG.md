@@ -7,6 +7,14 @@
 - Pin MCP integration CI to Vikunja 2.5.0 (canary already green on `latest`)
 - Describe the fork as Vikunja 2.5-ready (README, npm, MCP registry blurb)
 
+### Reliability
+
+- Add `scripts/smoke-dist.sh` — post-build gate that starts the compiled server and
+  asserts it answers a real MCP `initialize` (catches crash-on-import and stale
+  `dist/`; Vikunja #682 / #715)
+- Add `scripts/run-mcp.sh` — launcher auto-builds when `dist/` is missing or older
+  than `src/`, smoke-tests before exec, rebuilds once on smoke failure
+
 ## 0.3.2 — 2026-08-11
 
 ### Fixes

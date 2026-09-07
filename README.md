@@ -17,6 +17,8 @@ Upstream is slow to merge and release. This fork ships Vikunja **2.5**-ready fix
 - **Filtered lists paginate correctly**: `done` / `filter` go to the server before paging (with client-side fallback)
 - **Bulk writes vs SQLite**: default one write at a time, retry lock/5xx; raise with `VIKUNJA_BULK_WRITE_CONCURRENCY` on Postgres
 - **Vikunja 2.x**: `getAllTasks` uses `GET /tasks`; list responses include all items (no silent drop after 10)
+- **Focused task tools**: smaller tools (`vikunja_task_crud`, `vikunja_task_bulk`, …) alongside the all-in-one `vikunja_tasks` (same behavior; prefer focused tools for agents)
+- **Build smoke gate**: every `npm run build` starts `dist/` and checks a real MCP `initialize` reply so a broken build cannot ship silently
 - **Node.js 24** + Dockerized MCP integration CI against Vikunja 2.5
 
 A Model Context Protocol (MCP) server that enables AI assistants to interact with Vikunja task management instances. This fork treats the server as a **thin Vikunja API wrapper**: tool args are validated for shape (IDs, dates, enums), credentials are masked in logs, and DoS limits still apply — but **content policy for titles/descriptions belongs to Vikunja**, not a regex reject list in this process.
@@ -42,30 +44,9 @@ A Model Context Protocol (MCP) server that enables AI assistants to interact wit
 - **Memory protection** with pagination limits and usage monitoring
 - **Simplified architecture** with 90% code reduction for maintainability
 
-## 🚀 Major Architectural Improvements (v0.2.0)
+## Architecture notes (since v0.2.0)
 
-This release represents a **massive architectural simplification** that eliminates technical debt while enhancing security and reliability:
-
-### Storage Architecture Refactoring (90% Code Reduction)
-- **Before**: 33 files, 9,803 lines of over-engineered storage system
-- **After**: 4 files, essential functionality only
-- **Eliminated**: Complex orchestrators, health monitors, statistics tracking, migration systems
-- **Result**: Same external API with dramatically improved maintainability
-
-### Zod-Based Filter System (850+ Lines Removed)
-- **Before**: Custom tokenizer, parser, and validator with security vulnerabilities
-- **After**: Secure Zod schema validation with production-ready parsing
-- **Enhanced**: DoS protection and comprehensive error handling
-- **Result**: Faster parsing, better security, and enterprise-grade reliability
-
-### Production-Ready Retry System (580+ Lines Replaced)
-- **Before**: Custom retry logic with maintenance overhead
-- **After**: Battle-tested opossum circuit breaker library
-- **Features**: Circuit breaker state sharing, automatic recovery, comprehensive monitoring
-- **Result**: Production resilience with battle-tested patterns
-
-### Zero Breaking Changes
-All improvements maintain **100% backward compatibility** with existing implementations while providing enhanced reliability and security.
+The server uses a small in-memory filter store, Zod-validated filters (with DoS limits), and an opossum circuit breaker for API retries. External tool behavior stayed compatible across that cleanup.
 
 ## Requirements
 
@@ -122,6 +103,8 @@ npm install
 npm run build
 ```
 
+`npm run build` runs a **post-build smoke check** (`scripts/smoke-dist.sh`): it starts `dist/index.js` and requires a valid MCP `initialize` reply. A crash-on-import or stale `dist/` fails the build instead of shipping a silent empty tool list.
+
 Then configure your MCP client:
 
 ```json
@@ -138,6 +121,8 @@ Then configure your MCP client:
   }
 }
 ```
+
+For a local checkout that should rebuild itself when `dist/` is missing or older than `src/`, use `scripts/run-mcp.sh` as the MCP `command` (see comments in that script).
 
 ## Configuration
 
@@ -263,7 +248,25 @@ vikunja_auth.disconnect()
 
 ### Task Management Examples
 
+Prefer the focused tools (`vikunja_task_crud`, `vikunja_task_bulk`, …) when an agent is choosing tools. The all-in-one `vikunja_tasks` tool below still works and covers the same operations.
+
 ```typescript
+// Focused tools (recommended for agents)
+vikunja_task_crud({ operation: "list", allProjects: true })
+vikunja_task_crud({
+  operation: "create",
+  title: "Ship README update",
+  projectId: 1,
+  priority: 3,
+})
+vikunja_task_bulk({
+  operation: "bulk-update",
+  taskIds: [1, 2, 3],
+  field: "done",
+  value: true,
+})
+
+// All-in-one tool (same behavior via subcommand)
 // List all tasks across all projects
 vikunja_tasks.list({ allProjects: true })
 
@@ -1072,8 +1075,22 @@ This standardized format ensures:
   - `status` - Check authentication status
   - `refresh` - Refresh authentication token
 
-### Task Management ✅
-- `vikunja_tasks` - Task operations (fully implemented)
+### Focused Task Tools ✅ (preferred for agents)
+
+Smaller single-purpose tools with an `operation` field. Same Vikunja behavior as the matching `vikunja_tasks` subcommands.
+
+- `vikunja_task_crud` — `create`, `get`, `update`, `delete`, `list`
+- `vikunja_task_bulk` — `bulk-create`, `bulk-update`, `bulk-delete`
+- `vikunja_task_assignees` — `assign`, `unassign`, `list-assignees`
+- `vikunja_task_comments` — `comment`
+- `vikunja_task_reminders` — `add-reminder`, `remove-reminder`, `list-reminders`
+- `vikunja_task_labels` — `apply-label`, `remove-label`, `list-labels`
+- `vikunja_task_relations` — `relate`, `unrelate`, `relations`
+
+Manual walkthrough: [`docs/MCP-TEST-CHECKLIST.md`](docs/MCP-TEST-CHECKLIST.md).
+
+### Task Management ✅ (all-in-one)
+- `vikunja_tasks` - Task operations (fully implemented; prefer focused tools above when available)
   - `list` - List tasks with filters
     - Filter by project or get all tasks
     - Support for pagination, search, sorting

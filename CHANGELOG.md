@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Docs
+
+- README: document focused task tools, build smoke gate / `run-mcp.sh`,
+  and shorten the old v0.2.0 architecture section
+
 ### Platform
 
 - Pin MCP integration CI to Vikunja 2.5.0 (canary already green on `latest`)

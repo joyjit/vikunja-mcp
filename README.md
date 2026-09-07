@@ -75,7 +75,7 @@ The server uses a small in-memory filter store, Zod-validated filters (with DoS 
 
 Requires **Node.js 24+**. Use an API token (`tk_…`) or JWT from your Vikunja instance.
 
-Pin a version if you want (example): `"args": ["-y", "@joyjit/vikunja-mcp@0.3.2"]`.
+Pin a version if you want (example): `"args": ["-y", "@joyjit/vikunja-mcp@0.3.3"]`.
 
 ### Option 2: Install from GitHub (no npm needed)
 

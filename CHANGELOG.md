@@ -2,15 +2,7 @@
 
 ## Unreleased
 
-### Docs
-
-- README: document focused task tools, build smoke gate / `run-mcp.sh`,
-  and shorten the old v0.2.0 architecture section
-
-### Platform
-
-- Pin MCP integration CI to Vikunja 2.5.0 (canary already green on `latest`)
-- Describe the fork as Vikunja 2.5-ready (README, npm, MCP registry blurb)
+## 0.3.3 — 2026-09-07
 
 ### Reliability
 
@@ -19,6 +11,18 @@
   `dist/`; Vikunja #682 / #715)
 - Add `scripts/run-mcp.sh` — launcher auto-builds when `dist/` is missing or older
   than `src/`, smoke-tests before exec, rebuilds once on smoke failure
+
+### Platform
+
+- Pin MCP integration CI to Vikunja 2.5.0 (canary already green on `latest`)
+- Describe the fork as Vikunja 2.5-ready (README, npm, MCP registry blurb)
+- Bump nested deps (`browserslist`, `fast-uri`, `@humanfs/node`, `qs`, …) so
+  weekly `npm audit` / Security Scan stays clean
+
+### Docs
+
+- README: document focused task tools, build smoke gate / `run-mcp.sh`,
+  and shorten the old v0.2.0 architecture section
 
 ## 0.3.2 — 2026-08-11
 

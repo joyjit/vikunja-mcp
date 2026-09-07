@@ -18,18 +18,22 @@ export async function handleComment(args: {
   try {
     const { taskId, commentText } = commentValidationService.validateCommentInput(args);
 
-    // If no comment text provided, list comments
+    // The comment operation requires comment text. Reject missing/empty/whitespace-only
+    // text instead of silently falling through to a list (listing is handled separately
+    // via listComments / the 'list' operation).
     if (!commentValidationService.shouldCreateComment(commentText)) {
-      const comments = await CommentOperationsService.fetchTaskComments(taskId);
-
-      // Format and return response
-      const response = commentResponseFormatter.formatListCommentsResponse(comments);
-      return commentResponseFormatter.formatMcpResponse(response);
+      throw new MCPError(
+        ErrorCode.VALIDATION_ERROR,
+        'comment text is required for the comment operation',
+      );
     }
 
-    // Create a new comment
+    // Create a new comment (commentText is guaranteed present here; narrow for the type-checker)
     if (!commentText) {
-      throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Comment text is required for comment creation');
+      throw new MCPError(
+        ErrorCode.VALIDATION_ERROR,
+        'comment text is required for the comment operation',
+      );
     }
     const newComment = await CommentOperationsService.createComment(taskId, commentText);
 

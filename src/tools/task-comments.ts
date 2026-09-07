@@ -1,6 +1,6 @@
 /**
  * Task Comments Tool
- * Handles task comment operations: comment
+ * Handles task comment operations: comment, list
  * Replaces monolithic tasks tool with focused individual tool
  */
 
@@ -12,7 +12,7 @@ import { MCPError, ErrorCode } from '../types';
 import { getClientFromContext, setGlobalClientFactory } from '../client';
 import { logger } from '../utils/logger';
 import { createAuthRequiredError } from '../utils/error-handler';
-import { handleComment } from '../tools/tasks/comments/index';
+import { handleComment, listComments } from '../tools/tasks/comments/index';
 
 /**
  * Register task comments tool
@@ -24,12 +24,12 @@ export function registerTaskCommentsTool(
 ): void {
   server.tool(
     'vikunja_task_comments',
-    'Manage task comments: add comments to tasks',
+    'Manage task comments: add comments to tasks or list a task\'s comments',
     {
-      operation: z.enum(['comment']),
+      operation: z.enum(['comment', 'list']),
       // Task and comment identification
       id: z.number(),
-      comment: z.string(),
+      comment: z.string().optional(),
       commentId: z.number().optional(),
     },
     async (args) => {
@@ -51,7 +51,13 @@ export function registerTaskCommentsTool(
 
         switch (args.operation) {
           case 'comment':
-            return await handleComment(args);
+            return await handleComment({
+              id: args.id,
+              ...(args.comment !== undefined ? { comment: args.comment } : {}),
+            });
+
+          case 'list':
+            return await listComments({ id: args.id });
 
           default:
             throw new MCPError(

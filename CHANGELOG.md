@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.4 — 2026-09-14
+
+### Platform
+
+- Bump `@modelcontextprotocol/sdk` to ^1.30.0 and drop the `@hono/node-server`
+  override (Closes #15)
+- Bump nested `hono` / `js-yaml` pins so weekly `npm audit` / Security Scan
+  stays clean
+
 ## 0.3.3 — 2026-09-07
 
 ### Reliability

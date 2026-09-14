@@ -50,8 +50,15 @@ function rangePullsVulnerable(range) {
     // SDK no longer depends on the helper at all.
     return false;
   }
-  // True if any version satisfying the range is still below the fix.
-  return semver.intersects(range, `<${SAFE_FLOOR}`, { includePrerelease: true });
+  // True only when every OR-branch still forces a version below the fix.
+  // A range like "^1.19.9 || ^2.0.5" has a safe branch; npm prefers 2.x and
+  // the override can go. A lone "^1.19.9" still needs the pin.
+  const parts = range.split('||').map((part) => part.trim()).filter(Boolean);
+  const hasSafeBranch = parts.some((part) => {
+    const min = semver.minVersion(part);
+    return Boolean(min && semver.gte(min.version, SAFE_FLOOR));
+  });
+  return !hasSafeBranch;
 }
 
 function removeOverride() {

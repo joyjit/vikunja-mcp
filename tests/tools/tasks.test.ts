@@ -1450,20 +1450,15 @@ describe('Tasks Tool', () => {
   });
 
   describe('comment subcommand', () => {
-    it('should list comments for a task', async () => {
-      mockClient.tasks.getTaskComments.mockResolvedValue([mockComment]);
+    it('should throw when comment text is missing (no silent list fallback)', async () => {
+      await expect(
+        callTool('comment', {
+          id: 1,
+        }),
+      ).rejects.toThrow('Failed to handle comment: comment text is required for the comment operation');
 
-      const result = await callTool('comment', {
-        id: 1,
-      });
-
-      expect(mockClient.tasks.getTaskComments).toHaveBeenCalledWith(1);
-
-      const markdown = result.content[0].text;
-      const parsed = parseMarkdown(markdown);
-      const aorpStatus = parsed.getAorpStatus();
-      expect(aorpStatus.type).toBe('success');
-      expect(markdown).toContain('list');
+      // Must NOT silently fall through to listing comments
+      expect(mockClient.tasks.getTaskComments).not.toHaveBeenCalled();
     });
 
     it('should add a comment to a task', async () => {
@@ -1490,16 +1485,6 @@ describe('Tasks Tool', () => {
       await expect(callTool('comment', {})).rejects.toThrow();
     });
 
-    it('should handle comment errors', async () => {
-      mockClient.tasks.getTaskComments.mockRejectedValue(new Error('API Error'));
-
-      await expect(
-        callTool('comment', {
-          id: 1,
-        }),
-      ).rejects.toThrow('Failed to handle comment: API Error');
-    });
-
     it('should handle create comment errors', async () => {
       mockClient.tasks.createTaskComment.mockRejectedValue(new Error('Cannot create comment'));
 
@@ -1512,11 +1497,12 @@ describe('Tasks Tool', () => {
     });
 
     it('should handle non-Error API errors in comment', async () => {
-      mockClient.tasks.getTaskComments.mockRejectedValue(false);
+      mockClient.tasks.createTaskComment.mockRejectedValue(false);
 
       await expect(
         callTool('comment', {
           id: 1,
+          comment: 'Test',
         }),
       ).rejects.toThrow('Failed to handle comment: false');
     });

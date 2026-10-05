@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.5 — 2026-10-05
+
+### Platform
+
+- Bump nested deps (`brace-expansion`, `braces`, `fast-uri`, `ip-address`,
+  `markdown-it`, …) so weekly `npm audit` / Security Scan stays clean (#38)
+
 ## 0.3.4 — 2026-09-14
 
 ### Platform

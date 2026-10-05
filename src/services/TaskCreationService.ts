@@ -276,7 +276,7 @@ export class TaskCreationService {
         // The verification below is kept: checking beats assuming.
         // The task was just created, so `currentLabelIds: []` avoids an extra read.
         const updateResult = await addLabelsToTaskAdditive(
-          client as unknown as Parameters<typeof addLabelsToTaskAdditive>[0],
+          client,
           createdTask.id,
           labelIds,
           { currentLabelIds: [] },
@@ -417,7 +417,7 @@ export class TaskCreationService {
     if (userIds.length > 0 && createdTask.id) {
       try {
         await addAssigneesToTaskAdditive(
-          client as unknown as Parameters<typeof addAssigneesToTaskAdditive>[0],
+          client,
           createdTask.id,
           userIds,
           { currentAssigneeIds: [] },

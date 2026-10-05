@@ -120,12 +120,12 @@ export function createCircuitBreaker<T>(
 ): CircuitBreaker {
   const existingBreaker = circuitBreakerRegistry.get(name);
   if (existingBreaker) {
-    breakerDefaultOps.set(name, operation as () => Promise<unknown>);
+    breakerDefaultOps.set(name, operation);
     return existingBreaker;
   }
 
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  breakerDefaultOps.set(name, operation as () => Promise<unknown>);
+  breakerDefaultOps.set(name, operation);
 
   const breaker: CircuitBreaker = new CircuitBreaker(
     (op?: () => Promise<unknown>): Promise<unknown> => {
@@ -177,7 +177,7 @@ export async function withRetry<T>(
 
       const shouldRetry = opts.shouldRetry
         ? opts.shouldRetry(error as Error)
-        : isRetryableError(error as Error);
+        : isRetryableError(error);
 
       if (attempt === (opts.maxRetries ?? 3) || !shouldRetry) {
         throw error;

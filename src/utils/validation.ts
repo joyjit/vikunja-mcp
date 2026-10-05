@@ -179,7 +179,7 @@ export function validateValue(value: unknown): string | number | boolean | strin
       }
 
       if (firstElementType === 'number') {
-        if (!Number.isFinite(element as number)) {
+        if (!Number.isFinite(element)) {
           throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Array numeric values must be finite, not infinite or NaN');
         }
       }

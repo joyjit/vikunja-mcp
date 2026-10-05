@@ -8,7 +8,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { AuthManager } from '../auth/AuthManager';
 import type { VikunjaClientFactory } from '../client/VikunjaClientFactory';
-import type { Task } from '../types';
 import { MCPError, ErrorCode } from '../types';
 import { getClientFromContext, setGlobalClientFactory } from '../client';
 import { logger } from '../utils/logger';
@@ -61,7 +60,7 @@ async function listTasks(
     const response = createSuccessResponse(
       'list-tasks',
       `Found ${tasks.length} tasks${filteringMessage}`,
-      { tasks: tasks as Task[] }, // Convert from node-vikunja Task to our Task interface
+      { tasks: tasks }, // Convert from node-vikunja Task to our Task interface
       {
         count: tasks.length,
         filteringMethod: filteringMetadata.serverSideFilteringUsed ? 'server-side' :

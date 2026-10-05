@@ -135,7 +135,7 @@ export function formatSuccessMessage(
         content += formatDataItems(data as DataItem[]);
       }
     } else if (data && typeof data === 'object') {
-      content += formatObjectData(data as Record<string, unknown>);
+      content += formatObjectData(data);
     }
   }
 

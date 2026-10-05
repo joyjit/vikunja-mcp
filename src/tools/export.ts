@@ -16,7 +16,6 @@ import { MCPError, ErrorCode, createStandardResponse } from '../types';
 import { formatAorpAsMarkdown } from '../utils/response-factory';
 import { getClientFromContext } from '../client';
 import type { Project, Task, Label, User, VikunjaClient } from 'node-vikunja';
-import type { TypedVikunjaClient } from '../types/node-vikunja-extended';
 import { logger } from '../utils/logger';
 import { validateId as validateSharedId } from '../utils/validation';
 
@@ -42,7 +41,7 @@ async function exportProjectRecursive(
   includeChildren: boolean = false,
   visitedIds: Set<number> = new Set(),
 ): Promise<ProjectExportData> {
-  const vikunjaClient = client as TypedVikunjaClient;
+  const vikunjaClient = client;
   // Prevent infinite recursion
   if (visitedIds.has(projectId)) {
     throw new MCPError(

@@ -53,7 +53,7 @@ export function registerBatchImportTool(server: McpServer, authManager: AuthMana
           format: args.format,
           data: args.data,
           ...(args.skipErrors !== undefined && { skipErrors: args.skipErrors }),
-        } as { format: 'csv' | 'json'; data: string; skipErrors?: boolean };
+        };
 
         const tasks = parseInputData(parseOptions);
 

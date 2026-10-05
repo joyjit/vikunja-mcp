@@ -157,12 +157,6 @@ export const FilterValidator = {
       isValid: true,
       warnings,
       maxAllowed: taskCountValidation.maxAllowed
-    } as {
-      isValid: boolean;
-      warnings: string[];
-      maxAllowed?: number;
-      riskLevel?: 'low' | 'medium' | 'high';
-      estimatedMemoryMB?: number;
     };
   },
 

@@ -6,7 +6,6 @@
 import { type TaskResponseData, type TaskResponseMetadata, type AorpBuilderConfig, type AorpVerbosityLevel } from '../../../types';
 import { createAorpResponse, createTaskAorpResponse, createAorpErrorResponse } from '../../../utils/response-factory';
 import type { AorpFactoryResult } from '../../../types';
-import type { Task } from '../../../types/vikunja';
 import type { ResponseData } from '../../../utils/simple-response';
 
 /**
@@ -143,9 +142,9 @@ export function createTaskResponse(
 
   // Copy task data if present
   if (_data.task) {
-    responseData.tasks = [_data.task as Task]; // Convert from node-vikunja Task to our Task interface
+    responseData.tasks = [_data.task]; // Convert from node-vikunja Task to our Task interface
   } else if (_data.tasks) {
-    responseData.tasks = _data.tasks as Task[]; // Convert from node-vikunja Task[] to our Task[] interface
+    responseData.tasks = _data.tasks; // Convert from node-vikunja Task[] to our Task[] interface
   }
 
   // Copy other properties

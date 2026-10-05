@@ -12,7 +12,6 @@ import { validateAndConvertId } from '../utils/validation';
 import { wrapToolError } from '../utils/error-handler';
 import { getClientFromContext } from '../client';
 import type { Label } from 'node-vikunja';
-import type { TypedVikunjaClient } from '../types/node-vikunja-extended';
 import { formatAorpAsMarkdown } from '../utils/response-factory';
 
 // Use shared validateAndConvertId from utils/validation
@@ -49,7 +48,7 @@ export function registerLabelsTool(server: McpServer, authManager: AuthManager, 
         );
       }
 
-      const client = await getClientFromContext() as TypedVikunjaClient;
+      const client = await getClientFromContext();
 
       const subcommand = args.subcommand ?? 'list';
 

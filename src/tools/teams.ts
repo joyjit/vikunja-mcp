@@ -11,7 +11,6 @@ import { MCPError, ErrorCode, createStandardResponse } from '../types';
 import { getClientFromContext } from '../client';
 import { wrapToolError, handleStatusCodeError } from '../utils/error-handler';
 import type { Team } from 'node-vikunja';
-import type { TypedVikunjaClient } from '../types/node-vikunja-extended';
 import { validateAndConvertId } from '../utils/validation';
 import { formatAorpAsMarkdown } from '../utils/response-factory';
 
@@ -54,7 +53,7 @@ export function registerTeamsTool(server: McpServer, authManager: AuthManager, _
         );
       }
 
-      const client = await getClientFromContext() as TypedVikunjaClient;
+      const client = await getClientFromContext();
       const subcommand = args.subcommand ?? 'list';
 
       try {

@@ -430,6 +430,8 @@ describe('Task Relations Tool', () => {
       expect(markdown).toContain('blocking');
       expect(markdown).toContain('Child A');
       expect(markdown).toContain('Blocker');
+      // Structured groups (not only markdown) for machine consumers
+      expect(markdown).toContain('relationGroups');
     });
 
     it('should validate required task ID', async () => {

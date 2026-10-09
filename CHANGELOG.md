@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixes
+
+- Count and render task relations for Vikunja's map-shaped `related_tasks`
+  (was always "Found 0 relations") (#40; upstream democratize-technology#102;
+  credit: mdbook / PR #37)
+
 ## 0.3.5 — 2026-10-05
 
 ### Platform

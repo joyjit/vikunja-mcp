@@ -354,11 +354,13 @@ export async function handleRelationSubcommands(
           success: true,
           operation: 'relations',
           message,
-          // Return the normalized, grouped relations rather than the raw task
-          // blob so the output is readable and machine-parseable.
+          // Normalized groups in metadata (not only markdown) so callers can
+          // parse kinds/ids without scraping the message. Raw task omitted —
+          // related_tasks shape differs between node-vikunja types and live API.
           metadata: {
             timestamp: new Date().toISOString(),
             count: total,
+            relationGroups: groups,
           },
         };
 

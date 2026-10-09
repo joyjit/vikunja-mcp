@@ -17,16 +17,16 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v6
         with:
+          # No registry-url: setup-node would inject NODE_AUTH_TOKEN and
+          # block npm's OIDC Trusted Publishing path.
           node-version: '24.x'
-          registry-url: 'https://registry.npmjs.org'
-          scope: '@joyjit'
 
       - name: Publish probe package bump
         run: |
-          # Do not write _authToken / NODE_AUTH_TOKEN — npm OIDC handles publish.
-          {
-            echo '@joyjit:registry=https://registry.npmjs.org/'
-          } > "$NPM_CONFIG_USERCONFIG"
+          # Force OIDC path: any leftover token auth wins over Trusted Publishing.
+          unset NODE_AUTH_TOKEN
+          unset NPM_CONFIG_USERCONFIG
+          rm -f "$HOME/.npmrc"
 
           NPM_VER=$(npm --version)
           echo "npm ${NPM_VER}"

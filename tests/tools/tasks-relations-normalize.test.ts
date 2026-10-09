@@ -68,6 +68,36 @@ describe('normalizeRelatedTasks', () => {
     expect(total).toBe(1);
     expect(groups[0].tasks).toEqual([{ id: 5, title: 'ok' }]);
   });
+
+  it('accepts id (not only task_id) and optional title on the array shape', () => {
+    const related = [
+      { id: 7, relation_kind: 'related', title: 'Named' },
+      { task_id: 8 }, // missing kind → unknown
+      null,
+      { title: 'no id' },
+    ];
+    const { groups, total } = normalizeRelatedTasks(related);
+    expect(total).toBe(2);
+    expect(groups.find((g) => g.kind === 'related')!.tasks).toEqual([
+      { id: 7, title: 'Named' },
+    ]);
+    expect(groups.find((g) => g.kind === 'unknown')!.tasks).toEqual([{ id: 8 }]);
+  });
+
+  it('accepts task_id on map entries and skips non-array map values', () => {
+    const related = {
+      follows: [{ task_id: 11, title: 'Next' }],
+      noise: 'not-an-array',
+    };
+    const { groups, total } = normalizeRelatedTasks(related);
+    expect(total).toBe(1);
+    expect(groups).toEqual([{ kind: 'follows', tasks: [{ id: 11, title: 'Next' }] }]);
+  });
+
+  it('returns zero for non-object primitives', () => {
+    expect(normalizeRelatedTasks('oops')).toEqual({ groups: [], total: 0 });
+    expect(normalizeRelatedTasks(42)).toEqual({ groups: [], total: 0 });
+  });
 });
 
 describe('formatRelationGroups', () => {

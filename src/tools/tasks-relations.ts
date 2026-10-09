@@ -134,7 +134,6 @@ export function normalizeRelatedTasks(related: unknown): {
   const groups: RelationGroup[] = [];
   let total = 0;
   for (const [kind, tasks] of groupMap.entries()) {
-    if (tasks.length === 0) continue;
     groups.push({ kind, tasks });
     total += tasks.length;
   }

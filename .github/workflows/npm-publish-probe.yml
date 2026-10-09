@@ -13,20 +13,30 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Use Node.js
         uses: actions/setup-node@v6
         with:
-          # No registry-url: setup-node would inject NODE_AUTH_TOKEN and
-          # block npm's OIDC Trusted Publishing path.
+          # No registry-url: setup-node would inject NODE_AUTH_TOKEN /
+          # _authToken and block npm's OIDC Trusted Publishing path.
           node-version: '24.x'
 
       - name: Publish probe package bump
         run: |
           # Force OIDC path: any leftover token auth wins over Trusted Publishing.
           unset NODE_AUTH_TOKEN
+          unset NPM_TOKEN
           unset NPM_CONFIG_USERCONFIG
-          rm -f "$HOME/.npmrc"
+          rm -f "$HOME/.npmrc" "${RUNNER_TEMP:-/tmp}/.npmrc"
+
+          echo "oidc_url_set=$([ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && echo yes || echo no)"
+          echo "oidc_token_set=$([ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] && echo yes || echo no)"
+          echo "node_auth_token_set=$([ -n "${NODE_AUTH_TOKEN:-}" ] && echo yes || echo no)"
+          echo "github_actions=${GITHUB_ACTIONS:-}"
+          echo "workflow=${GITHUB_WORKFLOW:-} file=${GITHUB_WORKFLOW_REF:-}"
 
           NPM_VER=$(npm --version)
           echo "npm ${NPM_VER}"
@@ -73,6 +83,6 @@ jobs:
             fs.writeFileSync("README.md", "CI publish probe only.\n");
           ' "$NEXT"
 
-          npm publish --access public
+          npm publish --access public --loglevel verbose
           echo -n "registry now: "
           npm view @joyjit/npm-scope-probe version

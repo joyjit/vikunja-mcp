@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.6 — 2026-10-09
+
 ### Fixes
 
 - Count and render task relations for Vikunja's map-shaped `related_tasks`
@@ -14,6 +16,8 @@
 - Security Scan PR gate audits production deps (`--omit=dev`); full audit
   stays on the weekly schedule (dev-only handlebars/jest noise; handlebars
   4.7.10 blocked by `min-release-age=7` until ~2026-10-12)
+- Publish from GitHub Actions via npm Trusted Publishing (OIDC); no long-lived
+  `NPM_TOKEN` (Vikunja #755)
 
 ## 0.3.5 — 2026-10-05
 

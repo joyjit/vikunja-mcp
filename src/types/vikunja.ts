@@ -355,6 +355,8 @@ export interface StandardTaskResponse {
     affectedFields?: string[]; // For updates
     previousState?: Partial<VikunjaTask> | VikunjaTask[]; // For updates/deletes
     count?: number; // For list operations
+    /** Grouped relations for the `relations` operation (map/array API shapes). */
+    relationGroups?: Array<{ kind: string; tasks: Array<{ id: number; title?: string }> }>;
     fetchErrors?: number; // For bulk operations with fetch failures
     failedCount?: number; // For partial failures
     failedIds?: number[]; // IDs that failed in bulk operations

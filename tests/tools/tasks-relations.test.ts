@@ -399,6 +399,113 @@ describe('Task Relations Tool', () => {
       expect(markdown).toContain('Found 0 relations for task 1');
     });
 
+    it('should count + group relations when the API returns the MAP shape', async () => {
+      // Live Vikunja returns related_tasks as a map keyed by relation kind,
+      // each value an array of full related tasks (WITH titles).
+      mockClient.tasks.getTask.mockResolvedValue({
+        id: 1,
+        title: 'Parent',
+        project_id: 1,
+        related_tasks: {
+          subtask: [
+            { id: 2, title: 'Child A' },
+            { id: 3, title: 'Child B' },
+          ],
+          blocking: [{ id: 9, title: 'Blocker' }],
+        },
+      });
+
+      const result = await server.executeTool('vikunja_tasks', {
+        subcommand: 'relations',
+        id: 1,
+      });
+
+      const markdown = (result as any).content[0].text;
+      const parsed = parseMarkdown(markdown);
+      expect(parsed.getAorpStatus().type).toBe('success');
+      // Counts across ALL kinds (was 0 with the old related_tasks.length)
+      expect(markdown).toContain('Found 3 relations for task 1');
+      // Grouped, readable output with kinds + related task titles
+      expect(markdown).toContain('subtask');
+      expect(markdown).toContain('blocking');
+      expect(markdown).toContain('Child A');
+      expect(markdown).toContain('Blocker');
+      // Structured groups (not only markdown) for machine consumers
+      expect(markdown).toContain('relationGroups');
+    });
+
+    it('should enrich array-shape titles and tolerate lookup failures', async () => {
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({
+          id: 1,
+          title: 'Parent',
+          project_id: 1,
+          related_tasks: [
+            { task_id: 2, relation_kind: 'subtask' },
+            { task_id: 3, relation_kind: 'blocking' },
+          ],
+        })
+        .mockResolvedValueOnce({ id: 2, title: 'Child from lookup' })
+        .mockRejectedValueOnce(new Error('gone'));
+
+      const result = await server.executeTool('vikunja_tasks', {
+        subcommand: 'relations',
+        id: 1,
+      });
+
+      const markdown = (result as any).content[0].text;
+      expect(markdown).toContain('Found 2 relations for task 1');
+      expect(markdown).toContain('Child from lookup');
+      // Failed lookup keeps the id-only entry
+      expect(markdown).toContain('#3');
+      expect(mockClient.tasks.getTask).toHaveBeenCalledWith(2);
+      expect(mockClient.tasks.getTask).toHaveBeenCalledWith(3);
+    });
+
+    it('should skip title lookup when related task has no string title', async () => {
+      mockClient.tasks.getTask
+        .mockResolvedValueOnce({
+          id: 1,
+          title: 'Parent',
+          project_id: 1,
+          related_tasks: [{ task_id: 2, relation_kind: 'related' }],
+        })
+        .mockResolvedValueOnce({ id: 2, title: null });
+
+      const result = await server.executeTool('vikunja_tasks', {
+        subcommand: 'relations',
+        id: 1,
+      });
+
+      const markdown = (result as any).content[0].text;
+      expect(markdown).toContain('Found 1 relations for task 1');
+      expect(markdown).toContain('#2');
+      expect(markdown).not.toContain('null');
+    });
+
+    it('should cap title lookups so a heavily related task cannot fan out', async () => {
+      const many = Array.from({ length: 55 }, (_, i) => ({
+        task_id: i + 100,
+        relation_kind: 'related',
+      }));
+      mockClient.tasks.getTask.mockImplementation(async (id: number) => {
+        if (id === 1) {
+          return { id: 1, title: 'Parent', project_id: 1, related_tasks: many };
+        }
+        return { id, title: `T${id}` };
+      });
+
+      const result = await server.executeTool('vikunja_tasks', {
+        subcommand: 'relations',
+        id: 1,
+      });
+
+      const markdown = (result as any).content[0].text;
+      expect(markdown).toContain('Found 55 relations for task 1');
+      // Initial getTask(1) + at most 50 title lookups
+      expect(mockClient.tasks.getTask).toHaveBeenCalledTimes(51);
+    });
+
     it('should validate required task ID', async () => {
       await expect(
         server.executeTool('vikunja_tasks', {

@@ -8,6 +8,13 @@
   (was always "Found 0 relations") (#40; upstream democratize-technology#102;
   credit: mdbook / PR #37)
 
+### Platform
+
+- Bump `@modelcontextprotocol/sdk` to ^1.32.0 (clears production npm audit)
+- Security Scan PR gate audits production deps (`--omit=dev`); full audit
+  stays on the weekly schedule (dev-only handlebars/jest noise; handlebars
+  4.7.10 blocked by `min-release-age=7` until ~2026-10-12)
+
 ## 0.3.5 — 2026-10-05
 
 ### Platform

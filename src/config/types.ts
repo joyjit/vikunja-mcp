@@ -90,8 +90,8 @@ export type FeatureFlagsConfig = Record<string, never>;
 export const ApplicationConfigSchema = z.object({
   environment: z.nativeEnum(Environment).default(Environment.DEVELOPMENT),
   auth: AuthConfigSchema.default({}),
-  logging: LoggingConfigSchema.default({}),
-  rateLimiting: RateLimitConfigSchema.default({}),
+  logging: LoggingConfigSchema.prefault({}),
+  rateLimiting: RateLimitConfigSchema.prefault({}),
   // AORP is always enabled - no feature flags needed
 });
 

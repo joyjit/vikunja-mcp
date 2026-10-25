@@ -290,35 +290,33 @@ export function validateFilterExpression(expression: unknown): FilterExpression 
   } catch (error) {
     if (error instanceof z.ZodError) {
       // Check for specific Zod errors and provide better error messages
+      // Map by issue code and path, not message text (wording changes between Zod versions)
       const firstIssue = error.issues[0];
       if (firstIssue) {
+        const lastKey = firstIssue.path[firstIssue.path.length - 1];
         // Handle empty groups array
-        if (firstIssue.code === 'too_small' && firstIssue.path.length > 0 && firstIssue.path[firstIssue.path.length - 1] === 'groups') {
+        if (firstIssue.code === 'too_small' && lastKey === 'groups') {
           throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression must have at least one group');
         }
-        // Handle exceed maximum nesting depth or array size
+        // Too many conditions in a group, or too many groups
         if (firstIssue.code === 'too_big') {
-          if (firstIssue.message.includes('Array must contain at most 10 element(s)')) {
-            throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression exceeds maximum nesting depth of 10');
-          }
-          if (firstIssue.message.includes('conditions') || firstIssue.message.includes('50') || firstIssue.message.includes('Array must contain at most 50')) {
+          if (lastKey === 'conditions') {
             throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression cannot exceed 50 total conditions');
           }
-          // Generic too_big error for filter expressions
           throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression exceeds maximum nesting depth of 10');
         }
 
-        // Handle "Required" errors which might indicate missing required fields in deeply nested structures
-        if (firstIssue.code === 'invalid_type' && firstIssue.message === 'Required') {
+        // A missing required field usually means groups were nested where conditions belong
+        const missing = firstIssue.path.reduce<unknown>(
+          (node, key) => (node as Record<PropertyKey, unknown> | undefined)?.[key],
+          expression
+        ) === undefined;
+        if (firstIssue.code === 'invalid_type' && missing) {
           throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression exceeds maximum nesting depth of 10');
         }
 
-        // Check if any issue mentions conditions or 50
-        if (error.issues.some(issue =>
-          issue.message.includes('conditions') ||
-          issue.message.includes('50') ||
-          issue.message.includes('Array must contain at most 50')
-        )) {
+        // The only custom rule is the total-conditions refine
+        if (error.issues.some(issue => issue.code === 'custom')) {
           throw new MCPError(ErrorCode.VALIDATION_ERROR, 'Filter expression cannot exceed 50 total conditions');
         }
       }

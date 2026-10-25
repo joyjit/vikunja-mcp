@@ -32,8 +32,15 @@ fi
 ENTRY="$ROOT/dist/index.js"
 SMOKE="$ROOT/scripts/smoke-dist.sh"
 
-# Prefer nvm Node 20 when present (golpark); else PATH node.
-export PATH="${HOME}/.nvm/versions/node/v20.20.2/bin:${PATH}"
+# Prefer nvm's default Node when present (golpark); else PATH node.
+# The alias may be partial ("24"), so pick the newest installed match.
+NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [[ -s "$NVM_DIR/alias/default" ]]; then
+  want="$(tr -d 'v\n' < "$NVM_DIR/alias/default")"
+  nvm_bin="$(ls -d "$NVM_DIR/versions/node/v${want}"{,.*}/bin \
+    2>/dev/null | sort -V | tail -1 || true)"
+  [[ -n "$nvm_bin" ]] && export PATH="$nvm_bin:$PATH"
+fi
 NODE="$(command -v node || true)"
 if [[ -z "$NODE" ]]; then
   echo "vikunja-mcp: node not found on PATH" >&2

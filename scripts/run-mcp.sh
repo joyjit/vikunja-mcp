@@ -62,7 +62,7 @@ dist_is_stale() {
 
 run_build() {
   echo "vikunja-mcp: building $ROOT..." >&2
-  if ! (cd "$ROOT" && npm run build); then
+  if ! (cd "$ROOT" && npm run build) >&2; then
     echo "vikunja-mcp: build failed — fix errors in $ROOT" >&2
     exit 1
   fi
@@ -78,14 +78,15 @@ ensure_dist() {
   fi
 }
 
+# stdout is the MCP channel: keep smoke/build chatter on stderr.
 verify_dist() {
   [[ -x "$SMOKE" ]] || return 0
-  if "$SMOKE"; then
+  if "$SMOKE" >&2; then
     return 0
   fi
   echo "vikunja-mcp: smoke test failed — rebuilding once..." >&2
   run_build
-  "$SMOKE" || {
+  "$SMOKE" >&2 || {
     echo "vikunja-mcp: dist/ still broken after rebuild" >&2
     exit 1
   }

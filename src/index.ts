@@ -8,6 +8,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 import { AuthManager } from './auth/AuthManager';
 import { registerTools } from './tools';
@@ -17,9 +19,14 @@ import { createVikunjaClientFactory, setGlobalClientFactory, type VikunjaClientF
 
 dotenv.config({ quiet: true });
 
+// Report the package version; package.json sits one level above both src/ and dist/.
+const { version } = JSON.parse(
+  readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
+) as { version: string };
+
 const server = new McpServer({
   name: 'vikunja-mcp',
-  version: '0.3.0',
+  version,
 });
 
 const authManager = new AuthManager();

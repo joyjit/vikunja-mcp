@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.3.7 — 2026-10-25
+
+### Security
+
+- Upgrade `zod` to v4 (^4.6.7): clears GHSA-mrhx-c7xc-m3w5 (memory exhaustion
+  validating oversized collections); no fixed 3.x release (Vikunja #824)
+- Bump indirect deps body-parser 2.4.0, fast-uri 4.2.3, hono, ip-address;
+  `npm audit` is clean (Vikunja #824)
+
+### Fixes
+
+- Report the real package version in the MCP handshake (was hard-coded 0.3.0)
+- Config defaults for logging and rate limits still apply under zod 4
+  (`.prefault`); filter error messages map by zod issue code, not wording
+- Launcher: follow nvm's default Node instead of a pinned v20 (Vikunja #819);
+  keep smoke-check and build output off the MCP channel (Vikunja #823)
+
 ## 0.3.6 — 2026-10-09
 
 ### Fixes

@@ -21,7 +21,7 @@ const REMOVE = process.argv.includes('--remove');
 const PKG_PATH = 'package.json';
 const LOCK_PATH = 'package-lock.json';
 const OVERRIDE_KEY = '@hono/node-server';
-const SAFE_FLOOR = '2.0.5';
+const SAFE_FLOOR = '2.1.3';
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -51,8 +51,8 @@ function rangePullsVulnerable(range) {
     return false;
   }
   // True only when every OR-branch still forces a version below the fix.
-  // A range like "^1.19.9 || ^2.0.5" has a safe branch; npm prefers 2.x and
-  // the override can go. A lone "^1.19.9" still needs the pin.
+  // A range like "^1.19.9 || ^2.1.3" has a safe branch; npm prefers 2.x and
+  // the override can go. "^1.19.9 || ^2.0.5" still needs the pin (2.0.5 < 2.1.3).
   const parts = range.split('||').map((part) => part.trim()).filter(Boolean);
   const hasSafeBranch = parts.some((part) => {
     const min = semver.minVersion(part);

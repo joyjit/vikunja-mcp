@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.8 — 2026-11-09
+
+### Security
+
+- Pin `@hono/node-server` to `^2.1.3` (lockfile 2.1.6) so production
+  `npm audit` clears GHSA-rmxm-3fg6-px4f (serveStatic double-decode);
+  raise Hono Override Watch safe floor to 2.1.3 (#53, tracks undo in #52)
+
 ## 0.3.7 — 2026-10-25
 
 ### Security

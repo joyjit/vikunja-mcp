@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.9 — 2026-11-16
+
+### Security
+
+- Raise nested `hono` override to `^4.13.16` (lockfile 4.13.17) so
+  production `npm audit` clears the current moderate GHSA range
+  (`<=4.13.15`) (#55)
+
 ## 0.3.8 — 2026-11-09
 
 ### Security
